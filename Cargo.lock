@@ -3,13 +3,6 @@
 version = 3
 
 [[package]]
-name = "RLWFC"
-version = "0.1.0"
-dependencies = [
- "petgraph",
-]
-
-[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -45,4 +38,11 @@ checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
  "fixedbitset",
  "indexmap",
+]
+
+[[package]]
+name = "rlwfc"
+version = "0.1.0"
+dependencies = [
+ "petgraph",
 ]

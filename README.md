@@ -1,35 +1,35 @@
 # RLWFC - Rust Wave Function Collapse Library
 
-🦀 **基于Rust实现的Wave Function Collapse (WFC)算法库**
+RLWFC是一个基于Rust实现的Wave Function Collapse (WFC)算法库，使用petgraph作为底层图数据结构，提供类型安全和高性能的WFC实现。
 
-[![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
-[![petgraph](https://img.shields.io/badge/petgraph-0.6-blue.svg)](https://crates.io/crates/petgraph)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+## 项目概述
 
-## 🌟 特性
+这是对原C++ WFC系统的完整Rust重写，在保持API兼容性的同时，引入了现代Rust的设计理念和安全保证。
 
-- **类型安全**: 使用Rust的类型系统确保内存安全，完全消除空指针解引用
-- **方向感知**: 创新的方向识别系统，支持四方向（东南西北）网格操作
-- **高性能**: 基于petgraph图库，提供优化的图算法和内存布局
-- **零开销抽象**: 使用类型别名和空类型实现零内存开销
-- **完备错误处理**: 提供详细的错误类型和处理机制
-- **扩展性强**: 支持任意网格拓扑（三角形、六边形、3D等）
+### 核心特性
 
-## 🚀 快速开始
+- **类型安全**：编译时保证类型正确性，避免运行时错误
+- **内存安全**：自动内存管理，无悬垂指针和内存泄漏
+- **方向感知**：创新的方向识别系统，支持空间方向查询
+- **零成本抽象**：高级抽象不影响运行时性能
+- **并发安全**：支持并发访问的数据结构设计
+
+## 快速开始
 
 ### 添加依赖
 
-在你的 `Cargo.toml` 中添加：
+在您的 `Cargo.toml` 中添加：
 
 ```toml
 [dependencies]
-RLWFC = { path = "path/to/RLWFC" }
+rlwfc = "0.1.0"
+petgraph = "0.6"
 ```
 
 ### 基本使用
 
 ```rust
-use RLWFC::{GridSystem, Cell, Direction4, DirectionTrait};
+use rlwfc::{GridSystem, Cell, Direction4};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 创建网格系统
@@ -42,162 +42,114 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 创建边连接
     grid.create_edge(cell1, cell2)?;
     
-    // 获取邻居
-    let neighbors = grid.get_neighbors(cell1);
-    println!("Cell {:?} has {} neighbors", cell1, neighbors.len());
-    
-    // 方向查询
-    if let Some(east_neighbor) = grid.get_neighbor_by_direction(cell1, Direction4::East) {
-        println!("东邻居: {:?}", east_neighbor);
+    // 方向感知查询
+    if let Some(neighbor) = grid.get_neighbor_by_direction(cell1, Direction4::East) {
+        println!("Eastern neighbor: {:?}", neighbor);
     }
     
     Ok(())
 }
 ```
 
-## 📚 API 文档
+## 模块说明
 
-### 核心类型
+### wfc_util 模块
+提供基础类型定义、错误处理和方向系统：
+- 类型别名：`CellId`, `EdgeId`, `TileId` 等
+- 数据结构：`Cell`, `GraphEdge`, `Tile` 等
+- 方向系统：`DirectionTrait` 和 `Direction4`
 
-- **`GridSystem`**: 网格系统核心类，提供图操作和方向感知功能
-- **`Cell`**: 单元格数据结构
-- **`Direction4`**: 四方向枚举（东、南、西、北）
-- **`GridError`**: 错误类型定义
+### grid_system 模块
+实现WFC系统的核心网格管理功能：
+- 图操作：基于petgraph的高效图操作
+- 方向感知：零成本的方向识别和查询
+- 构建器模式：`GridBuilder` trait支持多种网格类型
 
-### 主要方法
+### tile_set 模块
+实现WFC算法的瓷砖管理和约束判断：
+- 瓷砖管理：高效的瓷砖存储和查询
+- 约束判断：灵活的约束规则实现
+- 泛型设计：支持任意类型的边数据
 
-#### GridSystem
+## 示例程序
 
-```rust
-// 创建网格系统
-let mut grid = GridSystem::new();
+运行示例程序来了解库的使用：
 
-// 添加单元格
-let cell_id = grid.add_cell(Cell::new());
+```bash
+# 基本使用示例
+cargo run --example basic_usage
 
-// 创建边
-grid.create_edge(from_cell, to_cell)?;
+# 网格构建器示例
+cargo run --example grid_builder_demo
 
-// 获取邻居
-let neighbors = grid.get_neighbors(cell_id);
-
-// 方向查询
-let neighbor = grid.get_neighbor_by_direction(cell_id, Direction4::East);
-
-// 验证结构
-grid.validate_structure()?;
+# 瓷砖系统示例
+cargo run --example tile_system_demo
 ```
 
-## 🏗️ 架构设计
+## 文档
 
-### 设计原则
+生成完整的API文档：
 
-1. **算法库定位**: 专注于提供核心图操作，具体构建逻辑由应用层实现
-2. **最小可行设计**: 只包含必要功能，避免过度工程化
-3. **方向感知**: 通过有向图和边创建顺序约定实现零开销的方向识别
-
-### 核心创新
-
-#### 方向识别系统
-
-利用petgraph有向图的稳定特性：
-- **插入逆序**: `neighbors()`返回边添加的逆序
-- **确定性行为**: 边的顺序完全由创建顺序决定
-- **零内存开销**: 不需要额外存储方向信息
-
-```rust
-// 标准边创建顺序：东向，然后南向
-grid.create_edge(center, east)?;   // 第一个边
-grid.create_edge(center, south)?;  // 第二个边
-
-// neighbors()返回: [south, east] (逆序)
-// Direction4::East  映射到索引 1
-// Direction4::South 映射到索引 0
+```bash
+cargo doc --open
 ```
 
-## 🧪 测试
+文档包含：
+- 详细的API参考
+- 使用示例和最佳实践
+- 架构设计说明
+- C++到Rust的映射表
 
-运行所有测试：
+## 与原C++版本对比
+
+| 特性 | C++ | Rust |
+|------|-----|------|
+| 内存安全 | 手动管理 | 自动保证 |
+| 类型安全 | 运行时检查 | 编译时保证 |
+| 错误处理 | 异常/返回码 | Result类型 |
+| 多态 | 虚函数继承 | Trait组合 |
+| 并发 | 手动同步 | 编译时保证 |
+| 方向感知 | 无 | 零成本实现 |
+
+## 测试
+
+运行测试套件：
 
 ```bash
 cargo test
 ```
 
-运行示例：
+所有核心功能都有对应的单元测试，确保代码质量和正确性。
 
-```bash
-cargo run --example basic_usage
-```
+## 开发状态
 
-## 📁 项目结构
+✅ 基础类型系统  
+✅ 网格系统和图操作  
+✅ 方向感知功能  
+✅ 瓷砖系统  
+✅ 构建器模式  
+✅ 完整的文档  
+✅ 示例程序  
+✅ 单元测试  
 
-```
-RLWFC/
-├── src/
-│   ├── lib.rs           # 库入口，重新导出主要类型
-│   ├── wfc_util.rs      # 基础类型定义、错误处理、方向系统
-│   └── grid_system.rs   # 网格系统实现
-├── examples/
-│   └── basic_usage.rs   # 基本使用示例
-├── Cargo.toml
-└── README.md
-```
+## 贡献
 
-## 🔧 开发
+欢迎贡献代码、报告问题或提出改进建议。请确保：
 
-### 构建
+1. 代码通过所有测试：`cargo test`
+2. 代码通过格式检查：`cargo fmt`
+3. 代码通过linting：`cargo clippy`
+4. 文档是最新的：`cargo doc`
 
-```bash
-cargo build
-```
+## 许可证
 
-### 检查代码
+本项目是毕业设计项目的一部分，版权归作者所有。
 
-```bash
-cargo check
-```
+## 作者
 
-### 格式化
+- **amazcuter** - *初始开发* - amazcuter@outlook.com
 
-```bash
-cargo fmt
-```
+## 致谢
 
-### 代码检查
-
-```bash
-cargo clippy
-```
-
-## 🤝 与原C++代码的对应关系
-
-| C++ | Rust | 说明 |
-|-----|------|------|
-| `CellID` | `CellId` | 单元格标识符 |
-| `EdgeID` | `EdgeId` | 边标识符 |
-| `GraphEdge` | `GraphEdge` | 图边数据 |
-| `Cell` | `Cell` | 单元格数据 |
-| `GridSystem::CreateEdge()` | `GridSystem::create_edge()` | 创建边 |
-| `GridSystem::getNeighbor()` | `GridSystem::get_neighbors()` | 获取邻居 |
-| `GridSystem::findEdge()` | `GridSystem::find_edge()` | 查找边 |
-
-## 🔮 未来计划
-
-- [ ] 支持更多网格类型（三角形、六边形）
-- [ ] 3D网格支持
-- [ ] 性能基准测试
-- [ ] 更多示例和教程
-- [ ] WebAssembly支持
-
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
-
-## 👨‍💻 作者
-
-**amazcuter** - amazcuter@outlook.com
-
-## 🙏 致谢
-
-- [petgraph](https://crates.io/crates/petgraph) - 优秀的Rust图库
-- Rust社区的支持和贡献 
+- 感谢petgraph库提供了优秀的图数据结构基础
+- 感谢Rust社区提供的工具和最佳实践指导 

@@ -8,7 +8,7 @@
  * @copyright Copyright (c) 2025
  */
 
-use RLWFC::{GridSystem, Cell, Tile, Direction4, DirectionTrait, find_in_2d_vector};
+use rlwfc::{GridSystem, Cell, Tile, Direction4, DirectionTrait, find_in_2d_vector};
 use std::collections::HashMap;
 
 /// 模拟C++WFCManager中的CellwfcData结构

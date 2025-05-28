@@ -1,7 +1,7 @@
 /**
  * @file basic_usage.rs
  * @author amazcuter (amazcuter@outlook.com)
- * @brief RLWFC库基本使用示例
+ * @brief rlwfc库基本使用示例
  *        展示如何创建网格系统、添加单元格、创建边连接，以及进行方向查询
  * @version 1.0
  * @date 2025-01-25
@@ -9,10 +9,10 @@
  * @copyright Copyright (c) 2025
  */
 
-use RLWFC::{GridSystem, Cell, Direction4, DirectionTrait};
+use rlwfc::{GridSystem, Cell, Direction4, DirectionTrait};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("=== RLWFC 基本使用示例 ===\n");
+    println!("=== rlwfc 基本使用示例 ===\n");
 
     // 1. 创建网格系统
     let mut grid = GridSystem::new();

@@ -390,6 +390,233 @@ where
 }
 ```
 
+## 瓷砖集系统重新设计 (TileSet.h -> tile_set.rs)
+
+### 1. TileSet 核心设计
+
+#### 原始 C++ 设计
+```cpp
+template <typename EdgeData>
+class TileSet {
+protected:
+    using Tiles = std::vector<TileID<EdgeData>>;
+    Tiles tiles_;
+
+public:
+    virtual void buildTileSet() = 0;
+    virtual bool judgePossibility(std::vector<Tiles> neighborPossibility, TileID<EdgeData> possibility) = 0;
+    
+    void addTile(const std::vector<EdgeData>& edges, int weight);
+    Tiles &getAllTiles();
+};
+```
+
+#### 新的 Rust 设计 - 虚函数 Trait + 具体实现
+
+```rust
+/// 瓷砖集虚函数特性 - 仅包含C++的两个虚函数
+pub trait TileSetVirtual<EdgeData> 
+where 
+    EdgeData: Clone + PartialEq + std::fmt::Debug
+{
+    /// 构建瓷砖集 - 对应C++的buildTileSet()虚函数
+    /// 
+    /// 这个方法负责初始化和填充瓷砖集合。
+    /// 具体的实现由各种不同的瓷砖集类型决定。
+    fn build_tile_set(&mut self);
+
+    /// 判断瓷砖可能性 - 对应C++的judgePossibility()虚函数
+    /// 
+    /// # 参数
+    /// * `neighbor_possibilities` - 邻居单元格的可能瓷砖列表
+    /// * `candidate` - 候选瓷砖ID
+    /// 
+    /// # 返回值
+    /// * `true` - 该瓷砖在当前邻居约束下是可能的
+    /// * `false` - 该瓷砖与邻居约束冲突
+    fn judge_possibility(
+        &self,
+        neighbor_possibilities: &[Vec<TileId>],
+        candidate: TileId
+    ) -> bool;
+}
+
+/// 瓷砖集具体实现 - 包含所有固定方法和数据存储
+#[derive(Debug, Clone)]
+pub struct TileSet<EdgeData> 
+where 
+    EdgeData: Clone + PartialEq + std::fmt::Debug
+{
+    /// 瓷砖列表 - 对应C++的tiles_成员
+    tiles: Vec<Tile<EdgeData>>,
+}
+
+impl<EdgeData> TileSet<EdgeData>
+where 
+    EdgeData: Clone + PartialEq + std::fmt::Debug
+{
+    /// 创建新的瓷砖集
+    pub fn new() -> Self {
+        Self {
+            tiles: Vec::new(),
+        }
+    }
+
+    /// 添加瓷砖 - 对应C++的addTile方法
+    /// 
+    /// # 参数
+    /// * `edges` - 边数据列表
+    /// * `weight` - 瓷砖权重
+    /// 
+    /// # 返回值
+    /// * 新创建瓷砖的ID
+    pub fn add_tile(&mut self, edges: Vec<EdgeData>, weight: i32) -> TileId {
+        let tile_id = self.tiles.len();
+        let tile = Tile::new(tile_id, weight, edges);
+        self.tiles.push(tile);
+        tile_id
+    }
+
+    /// 获取所有瓷砖 - 对应C++的getAllTiles()方法
+    pub fn get_all_tiles(&self) -> &[Tile<EdgeData>] {
+        &self.tiles
+    }
+
+    /// 获取所有瓷砖ID
+    pub fn get_all_tile_ids(&self) -> Vec<TileId> {
+        (0..self.tiles.len()).collect()
+    }
+
+    /// 根据ID获取瓷砖
+    pub fn get_tile(&self, tile_id: TileId) -> Option<&Tile<EdgeData>> {
+        self.tiles.get(tile_id)
+    }
+
+    /// 获取瓷砖数量
+    pub fn get_tile_count(&self) -> usize {
+        self.tiles.len()
+    }
+
+    /// 清空瓷砖集
+    pub fn clear(&mut self) {
+        self.tiles.clear();
+    }
+}
+```
+
+### 2. 使用示例
+
+以下是如何使用新的瓷砖集系统：
+
+```rust
+// 示例：具体的瓷砖集实现
+struct MyTileSet {
+    tiles: TileSet<&'static str>,
+}
+
+impl MyTileSet {
+    pub fn new() -> Self {
+        Self {
+            tiles: TileSet::new(),
+        }
+    }
+}
+
+// 只需要实现两个虚函数
+impl TileSetVirtual<&'static str> for MyTileSet {
+    fn build_tile_set(&mut self) {
+        // 清空现有瓷砖
+        self.tiles.clear();
+        
+        // 添加具体的瓷砖
+        self.tiles.add_tile(vec!["A", "B", "C", "D"], 10);
+        self.tiles.add_tile(vec!["B", "A", "D", "C"], 15);
+        self.tiles.add_tile(vec!["C", "D", "A", "B"], 5);
+    }
+
+    fn judge_possibility(
+        &self,
+        neighbor_possibilities: &[Vec<TileId>],
+        candidate: TileId
+    ) -> bool {
+        // 实现具体的兼容性判断逻辑
+        if let Some(candidate_tile) = self.tiles.get_tile(candidate) {
+            // 检查候选瓷砖与所有邻居的兼容性
+            for (direction, neighbors) in neighbor_possibilities.iter().enumerate() {
+                for &neighbor_id in neighbors {
+                    if let Some(neighbor_tile) = self.tiles.get_tile(neighbor_id) {
+                        // 检查在特定方向上的边兼容性
+                        if !candidate_tile.is_compatible_with(neighbor_tile, direction) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            true
+        } else {
+            false
+        }
+    }
+}
+
+// 对外暴露固定方法，直接代理到内部TileSet
+impl MyTileSet {
+    pub fn add_tile(&mut self, edges: Vec<&'static str>, weight: i32) -> TileId {
+        self.tiles.add_tile(edges, weight)
+    }
+
+    pub fn get_all_tiles(&self) -> &[Tile<&'static str>] {
+        self.tiles.get_all_tiles()
+    }
+
+    pub fn get_all_tile_ids(&self) -> Vec<TileId> {
+        self.tiles.get_all_tile_ids()
+    }
+
+    pub fn get_tile(&self, tile_id: TileId) -> Option<&Tile<&'static str>> {
+        self.tiles.get_tile(tile_id)
+    }
+
+    pub fn get_tile_count(&self) -> usize {
+        self.tiles.get_tile_count()
+    }
+}
+
+// 使用示例 - 与C++使用模式完全一致
+fn example_usage() {
+    let mut tile_set = MyTileSet::new();
+    
+    // 构建瓷砖集 - 对应C++的buildTileSet()调用
+    tile_set.build_tile_set();
+    
+    // 获取所有瓷砖 - 对应C++的getAllTiles()调用
+    let all_tiles = tile_set.get_all_tiles();
+    println!("瓷砖数量: {}", all_tiles.len());
+    
+    // 判断可能性 - 对应C++的judgePossibility()调用
+    let neighbor_possibilities = vec![vec![0, 1], vec![1, 2]];
+    let is_possible = tile_set.judge_possibility(&neighbor_possibilities, 0);
+    println!("瓷砖0可能性: {}", is_possible);
+}
+```
+
+### 3. 设计优势
+
+#### 与C++对比的优势
+
+1. **内存安全**: 无需手动管理瓷砖内存，避免内存泄漏
+2. **类型安全**: 编译时检查，避免运行时错误  
+3. **精确对应**: 只有虚函数在trait中，普通方法写死在具体实现中
+4. **零成本抽象**: trait方法可以被内联优化
+5. **简洁设计**: 最小化trait接口，避免不必要的虚函数开销
+
+#### 兼容性保证
+
+1. **API一致性**: 所有C++方法都有对应的Rust实现
+2. **语义一致性**: 只有真正的虚函数通过trait实现多态
+3. **使用模式**: 保持与C++完全一致的初始化和使用流程
+4. **性能一致性**: 普通方法直接调用，无虚函数开销
+
 ## 网格系统重新设计 (GridSystem.h -> grid_system.rs)
 
 ### 1. GridSystem 核心结构
@@ -732,7 +959,13 @@ fn validate_grid_construction<D: DirectionTrait>(
 2. 提供基础的图操作API
 3. 确保API兼容性和性能
 
-### 阶段3: 集成测试和文档
+### 阶段3: 瓷砖集系统实现
+1. 实现 `TileSetBuilder` 和 `PossibilityJudge` traits
+2. 实现 `TileSetStorage` 和 `TileSet` 组合结构
+3. 提供与C++虚函数等价的功能
+4. 编写瓷砖集相关的测试
+
+### 阶段4: 集成测试和文档
 1. 与 WFCManager 集成
 2. 性能基准测试
 3. 内存使用分析
@@ -777,8 +1010,10 @@ petgraph = "0.6"
 
 1. **利用petgraph稳定特性**: 充分利用有向图邻居返回逆序的稳定行为
 2. **双向连接支持**: 通过边对实现真正的双向连接
-3. **完备的trait系统**: DirectionTrait提供灵活的方向抽象
-4. **全面的错误处理**: 从编译时到运行时的多层次错误防护
+3. **完备的trait系统**: DirectionTrait提供灵活的方向抽象，TileSet统一接口完美替代C++虚函数
+4. **统一设计**: 瓷砖集系统使用单一trait接口，保持概念的整体性
+5. **零成本抽象**: trait方法内联优化，保持性能的同时提供灵活性
+6. **全面的错误处理**: 从编译时到运行时的多层次错误防护
 
 ### 已解决的设计问题 ✅
 
@@ -787,8 +1022,17 @@ petgraph = "0.6"
 - **双向连接**: 澄清了单向边vs双向连接的概念区别
 - **性能声称**: 提供了客观的复杂度分析，避免无根据的性能声称
 - **接口设计**: 简化并文档化了DirectionTrait，提供了完整示例
+- **虚函数替代**: 通过trait系统完美替代C++虚函数，保持多态性和扩展性
+- **内存管理**: 消除手动内存管理，避免C++中的内存泄漏问题
 
-该设计成功实现了极简的代码结构，解决了WFC算法中的关键方向识别问题，同时保持了与原有C++代码的完全兼容性。通过创新的索引方案和完善的错误处理，我们实现了性能、简洁性、可靠性和功能性的平衡。
+该设计成功实现了极简的代码结构，解决了WFC算法中的关键方向识别问题和虚函数替代问题，同时保持了与原有C++代码的完全兼容性。通过创新的索引方案、trait组合设计和完善的错误处理，我们实现了性能、简洁性、可靠性和功能性的完美平衡。
+
+**瓷砖集系统创新点**:
+- **精确虚函数映射**: 只有真正的虚函数在trait中，完美对应C++设计
+- **性能优化**: 普通方法直接实现，避免不必要的动态分发开销
+- **类型安全替代**: 提供比C++虚函数更强的编译时类型检查
+- **最小化接口**: trait只包含必要的虚函数，保持设计简洁
+- **内存安全**: 完全消除手动内存管理和潜在的内存泄漏风险
 
 ## 完整使用示例
 

@@ -1,3 +1,120 @@
+//! # 网格系统模块
+//! 
+//! 本模块提供了WFC（Wave Function Collapse）系统的网格系统实现，是对原C++代码的Rust重写版本。
+//! 主要包含两个核心组件：
+//! 
+//! - [`GridBuilder`] trait：对应原C++的`buildGridSystem()`纯虚函数
+//! - [`GridSystem`] 结构体：对应原C++的`GridSystem`类
+//! 
+//! ## 设计理念
+//! 
+//! ### GridBuilder Trait 设计
+//! 
+//! `GridBuilder` trait 是对原C++代码中 `buildGridSystem()` 纯虚函数的Rust实现，
+//! 提供了一种类型安全、可组合的方式来构建不同类型的网格系统。
+//! 
+//! #### 原C++设计回顾
+//! 
+//! 在原C++代码中：
+//! 
+//! ```cpp
+//! class GridSystem {
+//!     // 建立网格系统纯虚函数
+//!     virtual void buildGridSystem() = 0;
+//!     
+//!     // 其他方法...
+//! };
+//! 
+//! class Orthogonal2DGrid : public GridSystem {
+//!     virtual void buildGridSystem() override {
+//!         // 具体的2D正交网格构建逻辑
+//!     }
+//! };
+//! ```
+//! 
+//! #### Rust实现的改进
+//! 
+//! 相比C++的继承机制，Rust的trait设计提供了以下优势：
+//! 
+//! 1. **类型安全**：编译时错误检查，没有运行时类型转换
+//! 2. **组合而非继承**：避免了复杂的继承层次，更好的代码复用
+//! 3. **内存安全**：自动内存管理，借用检查器防止数据竞争
+//! 4. **更灵活的设计**：可以在同一个GridSystem上使用不同的builder
+//! 
+//! ## 使用示例
+//! 
+//! ### 基本用法
+//! 
+//! ```rust
+//! use rlwfc::{GridSystem, Cell, Direction4};
+//! 
+//! // 创建网格系统
+//! let mut grid = GridSystem::new();
+//! 
+//! // 添加单元格
+//! let cell1 = grid.add_cell(Cell::with_id(1));
+//! let cell2 = grid.add_cell(Cell::with_id(2));
+//! 
+//! // 创建连接
+//! grid.create_edge(cell1, cell2).unwrap();
+//! 
+//! // 获取邻居
+//! let neighbors = grid.get_neighbors(cell1);
+//! println!("Cell {:?} has {} neighbors", cell1, neighbors.len());
+//! 
+//! // 方向感知查询
+//! if let Some(neighbor) = grid.get_neighbor_by_direction(cell1, Direction4::East) {
+//!     println!("Eastern neighbor: {:?}", neighbor);
+//! }
+//! ```
+//! 
+//! ### 使用GridBuilder构建复杂网格
+//! 
+//! ```rust
+//! use rlwfc::{GridSystem, GridBuilder, Cell, GridError};
+//! 
+//! // 自定义网格构建器
+//! struct LinearGridBuilder {
+//!     length: usize,
+//! }
+//! 
+//! impl GridBuilder for LinearGridBuilder {
+//!     fn build_grid_system(&mut self, grid: &mut GridSystem) -> Result<(), GridError> {
+//!         // 创建线性连接的单元格
+//!         let mut cells = Vec::new();
+//!         for i in 0..self.length {
+//!             let cell = grid.add_cell(Cell::with_id(i as u32));
+//!             cells.push(cell);
+//!         }
+//!         
+//!         // 创建线性连接
+//!         for i in 0..self.length - 1 {
+//!             grid.create_edge(cells[i], cells[i + 1])?;
+//!         }
+//!         
+//!         Ok(())
+//!     }
+//!     
+//!     fn get_grid_type_name(&self) -> &'static str {
+//!         "LinearGrid"
+//!     }
+//! }
+//! 
+//! // 使用builder创建网格
+//! let builder = LinearGridBuilder { length: 5 };
+//! let grid = GridSystem::from_builder(builder).unwrap();
+//! ```
+//! 
+//! ## 方向感知系统
+//! 
+//! 本模块的一个重要特性是方向感知能力，这是基于petgraph有向图的特性实现的：
+//! 
+//! - 使用有向图存储单元格连接
+//! - 利用petgraph的稳定邻居顺序（按插入逆序）
+//! - 通过[`DirectionTrait`]映射方向到邻居索引
+//! 
+//! 这使得可以通过方向名称直接查询邻居，而不需要额外的方向信息存储。
+
 /**
  * @file grid_system.rs
  * @author amazcuter (amazcuter@outlook.com)
@@ -14,16 +131,229 @@ use petgraph::Graph;
 use std::collections::HashMap;
 
 // =============================================================================
+// GridBuilder Trait - 对应C++的buildGridSystem虚函数
+// =============================================================================
+
+/// 网格构建器trait，对应原C++的buildGridSystem纯虚函数
+/// 
+/// 这个trait定义了构建不同类型网格的统一接口。每个具体的网格类型
+/// （如2D正交网格、六角形网格、3D网格等）都应该实现这个trait。
+/// 
+/// ## 与原C++设计的对比
+/// 
+/// | 特性 | C++ | Rust |
+/// |------|-----|------|
+/// | 多态机制 | 虚函数继承 | Trait系统 |
+/// | 类型安全 | 运行时检查 | 编译时检查 |
+/// | 内存管理 | 手动管理 | 自动管理 |
+/// | 错误处理 | 异常/返回码 | Result类型 |
+/// | 扩展性 | 继承层次 | 组合设计 |
+/// 
+/// ## 实现指南
+/// 
+/// 实现这个trait时，`build_grid_system`方法应该：
+/// 
+/// 1. 创建所有需要的单元格
+/// 2. 建立单元格之间的连接关系
+/// 3. 设置特定网格类型的属性
+/// 4. 返回构建结果（成功或错误）
+/// 
+/// ## 示例实现
+/// 
+/// ```rust,no_run
+/// use rlwfc::{GridSystem, GridBuilder, GridError, Cell};
+/// 
+/// struct SimpleGridBuilder {
+///     width: usize,
+///     height: usize,
+/// }
+/// 
+/// impl GridBuilder for SimpleGridBuilder {
+///     fn build_grid_system(&mut self, grid: &mut GridSystem) -> Result<(), GridError> {
+///         // 1. 创建所有单元格
+///         let mut cells = vec![vec![]; self.height];
+///         for y in 0..self.height {
+///             cells[y] = Vec::with_capacity(self.width);
+///             for x in 0..self.width {
+///                 let cell_id = grid.add_cell_with_name(
+///                     Cell::with_id((y * self.width + x) as u32),
+///                     format!("cell_{}_{}", x, y)
+///                 );
+///                 cells[y].push(cell_id);
+///             }
+///         }
+/// 
+///         // 2. 创建连接
+///         for y in 0..self.height {
+///             for x in 0..self.width {
+///                 let current = cells[y][x];
+///                 
+///                 // 连接到右边
+///                 if x + 1 < self.width {
+///                     grid.create_edge(current, cells[y][x + 1])?;
+///                 }
+///                 
+///                 // 连接到下面
+///                 if y + 1 < self.height {
+///                     grid.create_edge(current, cells[y + 1][x])?;
+///                 }
+///             }
+///         }
+/// 
+///         Ok(())
+///     }
+///     
+///     fn get_dimensions(&self) -> Vec<usize> {
+///         vec![self.width, self.height]
+///     }
+///     
+///     fn get_grid_type_name(&self) -> &'static str {
+///         "SimpleGrid"
+///     }
+/// }
+/// ```
+pub trait GridBuilder {
+    /// 构建网格系统，对应原C++的buildGridSystem()纯虚函数
+    /// 
+    /// 这个方法是GridBuilder trait的核心，负责实际的网格构建逻辑。
+    /// 不同的网格类型会有不同的实现方式。
+    /// 
+    /// # 参数
+    /// 
+    /// * `grid` - 要构建的网格系统，方法应该在其中添加单元格和边
+    /// 
+    /// # 返回值
+    /// 
+    /// * `Ok(())` - 构建成功
+    /// * `Err(GridError)` - 构建过程中遇到错误
+    /// 
+    /// # 错误情况
+    /// 
+    /// - 创建重复边时返回`GridError::EdgeAlreadyExists`
+    /// - 尝试创建自循环时返回`GridError::SelfLoop`
+    /// - 其他图操作错误
+    fn build_grid_system(&mut self, grid: &mut GridSystem) -> Result<(), GridError>;
+    
+    /// 获取网格的维度信息（可选实现）
+    /// 
+    /// 返回网格的维度信息，例如：
+    /// - 2D网格：`[width, height]`
+    /// - 3D网格：`[width, height, depth]`
+    /// - 线性网格：`[length]`
+    /// 
+    /// 默认实现返回空向量，表示未指定维度。
+    fn get_dimensions(&self) -> Vec<usize> {
+        vec![]
+    }
+    
+    /// 获取网格类型的名称（可选实现）
+    /// 
+    /// 返回一个描述性的网格类型名称，用于调试和日志输出。
+    /// 
+    /// 默认实现返回"CustomGrid"。
+    fn get_grid_type_name(&self) -> &'static str {
+        "CustomGrid"
+    }
+}
+
+// =============================================================================
 // GridSystem 核心结构
 // =============================================================================
 
 /// 网格系统类，对应原C++的GridSystem类
-/// 使用有向图实现方向感知的图操作
+/// 
+/// `GridSystem`是WFC系统的核心数据结构，使用有向图来表示单元格之间的连接关系。
+/// 与原C++实现相比，这个Rust版本提供了以下改进：
+/// 
+/// ## 核心特性
+/// 
+/// ### 1. 方向感知能力
+/// 
+/// 使用有向图实现零成本的方向识别：
+/// - 每条边代表一个方向性连接
+/// - 利用petgraph的稳定邻居顺序
+/// - 通过[`DirectionTrait`]实现方向到索引的映射
+/// 
+/// ### 2. 类型安全
+/// 
+/// - 所有操作都有明确的类型约束
+/// - 编译时错误检查
+/// - 使用`Result`类型进行错误处理
+/// 
+/// ### 3. 内存安全
+/// 
+/// - 自动内存管理，无需手动释放
+/// - 借用检查器防止数据竞争
+/// - 无空指针或野指针风险
+/// 
+/// ## 与原C++的API对应关系
+/// 
+/// | C++方法 | Rust方法 | 说明 |
+/// |---------|----------|------|
+/// | `CreateEdge(cellA, cellB)` | [`create_edge(from, to)`] | 创建有向边 |
+/// | `getNeighbor(cell)` | [`get_neighbors(cell_id)`] | 获取邻居列表 |
+/// | `findEdge(cellA, cellB)` | [`find_edge(from, to)`] | 查找边 |
+/// | `getAllCells()` | [`get_all_cells()`] | 获取所有单元格 |
+/// | `getCellsNum()` | [`get_cells_count()`] | 获取单元格数量 |
+/// | `buildGridSystem()` | [`build_with(builder)`] | 构建网格系统 |
+/// 
+/// ## 使用模式
+/// 
+/// ### 方式一：分步构建
+/// 
+/// ```rust,no_run
+/// use rlwfc::{GridSystem, GridBuilder, GridError};
+/// 
+/// struct CustomGridBuilder;
+/// 
+/// impl GridBuilder for CustomGridBuilder {
+///     fn build_grid_system(&mut self, grid: &mut GridSystem) -> Result<(), GridError> {
+///         Ok(())
+///     }
+/// }
+/// 
+/// let mut grid = GridSystem::new();
+/// let builder = CustomGridBuilder;
+/// grid.build_with(builder)?;
+/// # Ok::<(), GridError>(())
+/// ```
+/// 
+/// ### 方式二：直接构建
+/// 
+/// ```rust,no_run
+/// use rlwfc::{GridSystem, GridBuilder, GridError};
+/// 
+/// struct CustomGridBuilder;
+/// 
+/// impl GridBuilder for CustomGridBuilder {
+///     fn build_grid_system(&mut self, grid: &mut GridSystem) -> Result<(), GridError> {
+///         Ok(())
+///     }
+/// }
+/// 
+/// let builder = CustomGridBuilder;
+/// let grid = GridSystem::from_builder(builder)?;
+/// # Ok::<(), GridError>(())
+/// ```
+/// 
+/// [`create_edge(from, to)`]: GridSystem::create_edge
+/// [`get_neighbors(cell_id)`]: GridSystem::get_neighbors
+/// [`find_edge(from, to)`]: GridSystem::find_edge
+/// [`get_all_cells()`]: GridSystem::get_all_cells
+/// [`get_cells_count()`]: GridSystem::get_cells_count
+/// [`build_with(builder)`]: GridSystem::build_with
 pub struct GridSystem {
     /// 底层图存储，使用有向图支持方向识别
+    /// 
+    /// 这是整个网格系统的核心数据结构。使用petgraph的有向图来存储：
+    /// - 节点：代表网格中的单元格
+    /// - 边：代表单元格之间的有向连接
     graph: WFCGraph,
     
     /// 可选的单元格名称映射，用于快速查找
+    /// 
+    /// 允许通过字符串名称快速查找单元格ID，便于调试和测试。
+    /// 这是一个可选功能，不影响核心图操作的性能。
     cell_lookup: HashMap<String, CellId>,
 }
 
@@ -42,6 +372,18 @@ impl GridSystem {
             graph: Graph::with_capacity(nodes, edges),
             cell_lookup: HashMap::new(),
         }
+    }
+
+    /// 使用builder构建网格系统，对应原C++的多态buildGridSystem调用
+    pub fn build_with<T: GridBuilder>(&mut self, mut builder: T) -> Result<(), GridError> {
+        builder.build_grid_system(self)
+    }
+
+    /// 创建新的网格系统并立即使用builder构建
+    pub fn from_builder<T: GridBuilder>(mut builder: T) -> Result<Self, GridError> {
+        let mut grid = Self::new();
+        builder.build_grid_system(&mut grid)?;
+        Ok(grid)
     }
 
     // ==========================================================================
@@ -277,22 +619,70 @@ impl GridSystem {
 }
 
 // =============================================================================
-// Default trait 实现
-// =============================================================================
-
-impl Default for GridSystem {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-// =============================================================================
 // 测试模块
 // =============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // 测试用的简单网格构建器
+    struct SimpleGridBuilder {
+        width: usize,
+        height: usize,
+    }
+
+    impl SimpleGridBuilder {
+        fn new(width: usize, height: usize) -> Self {
+            Self { width, height }
+        }
+    }
+
+    impl GridBuilder for SimpleGridBuilder {
+        fn build_grid_system(&mut self, grid: &mut GridSystem) -> Result<(), GridError> {
+            // 创建一个简单的width x height网格
+            let mut cells = vec![vec![]; self.height];
+            
+            // Step 1: 创建所有单元格
+            for y in 0..self.height {
+                cells[y] = Vec::with_capacity(self.width);
+                for x in 0..self.width {
+                    let cell_id = grid.add_cell_with_name(
+                        Cell::with_id((y * self.width + x) as u32),
+                        format!("cell_{}_{}", x, y)
+                    );
+                    cells[y].push(cell_id);
+                }
+            }
+
+            // Step 2: 创建连接（每个cell连接到右边和下面的邻居）
+            for y in 0..self.height {
+                for x in 0..self.width {
+                    let current = cells[y][x];
+                    
+                    // 连接到右边
+                    if x + 1 < self.width {
+                        grid.create_edge(current, cells[y][x + 1])?;
+                    }
+                    
+                    // 连接到下面
+                    if y + 1 < self.height {
+                        grid.create_edge(current, cells[y + 1][x])?;
+                    }
+                }
+            }
+
+            Ok(())
+        }
+
+        fn get_dimensions(&self) -> Vec<usize> {
+            vec![self.width, self.height]
+        }
+
+        fn get_grid_type_name(&self) -> &'static str {
+            "SimpleGrid"
+        }
+    }
 
     #[test]
     fn test_grid_system_creation() {
@@ -380,5 +770,37 @@ mod tests {
         
         // 验证应该成功
         assert!(grid.validate_structure().is_ok());
+    }
+
+    #[test]
+    fn test_grid_builder_trait() {
+        // 测试使用builder构建网格
+        let builder = SimpleGridBuilder::new(3, 2);
+        let mut grid = GridSystem::new();
+        
+        // 使用builder构建网格
+        grid.build_with(builder).unwrap();
+        
+        // 验证构建结果
+        assert_eq!(grid.get_cells_count(), 6); // 3x2 = 6个单元格
+        
+        // 验证命名单元格
+        assert!(grid.get_cell_by_name("cell_0_0").is_some());
+        assert!(grid.get_cell_by_name("cell_2_1").is_some());
+        assert!(grid.get_cell_by_name("cell_3_0").is_none()); // 超出范围
+    }
+
+    #[test]
+    fn test_from_builder() {
+        // 测试从builder直接创建网格
+        let builder = SimpleGridBuilder::new(2, 2);
+        let grid = GridSystem::from_builder(builder).unwrap();
+        
+        assert_eq!(grid.get_cells_count(), 4); // 2x2 = 4个单元格
+        
+        // 测试连接性：每个内部单元格应该有邻居
+        let cell_0_0 = grid.get_cell_by_name("cell_0_0").unwrap();
+        let neighbors = grid.get_neighbors(cell_0_0);
+        assert_eq!(neighbors.len(), 2); // 连接到右边和下面
     }
 } 
