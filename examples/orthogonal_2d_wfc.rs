@@ -61,22 +61,30 @@ impl GridBuilder for Orthogonal2DGridBuilder {
                 
                 // 1. 东边 (向右)
                 if x < self.width - 1 {
-                    grid.create_edge(current, cells[y][x + 1])?;
+                    grid.create_edge(current, Some(cells[y][x + 1]))?;
+                } else {
+                    grid.create_edge(current, None)?;
                 }
                 
                 // 2. 南边 (向下)
                 if y < self.height - 1 {
-                    grid.create_edge(current, cells[y + 1][x])?;
+                    grid.create_edge(current, Some(cells[y + 1][x]))?;
+                } else {
+                    grid.create_edge(current, None)?;
                 }
                 
                 // 3. 西边 (向左)
                 if x > 0 {
-                    grid.create_edge(current, cells[y][x - 1])?;
+                    grid.create_edge(current, Some(cells[y][x - 1]))?;
+                } else {
+                    grid.create_edge(current, None)?;
                 }
                 
                 // 4. 北边 (向上)
                 if y > 0 {
-                    grid.create_edge(current, cells[y - 1][x])?;
+                    grid.create_edge(current, Some(cells[y - 1][x]))?;
+                } else {
+                    grid.create_edge(current, None)?;
                 }
             }
         }

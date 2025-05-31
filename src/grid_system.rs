@@ -128,7 +128,9 @@
 
 use crate::wfc_util::*;
 use petgraph::Graph;
+use petgraph::graph::{NodeIndex, EdgeIndex};
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 // =============================================================================
 // GridBuilder Trait - 对应C++的buildGridSystem虚函数
@@ -389,6 +391,9 @@ pub struct GridSystem {
     /// 允许通过字符串名称快速查找单元格ID，便于调试和测试。
     /// 这是一个可选功能，不影响核心图操作的性能。
     cell_lookup: HashMap<String, CellId>,
+    
+    /// 虚拟节点集合，用于存储边界虚拟节点
+    virtual_nodes: HashSet<CellId>,
 }
 
 impl GridSystem {
@@ -397,6 +402,7 @@ impl GridSystem {
         Self {
             graph: Graph::new(),
             cell_lookup: HashMap::new(),
+            virtual_nodes: HashSet::new(),
         }
     }
 
@@ -405,6 +411,7 @@ impl GridSystem {
         Self {
             graph: Graph::with_capacity(nodes, edges),
             cell_lookup: HashMap::new(),
+            virtual_nodes: HashSet::new(),
         }
     }
 
@@ -441,6 +448,11 @@ impl GridSystem {
         self.cell_lookup.get(name).copied()
     }
 
+    /// 判断节点是否是虚拟节点
+    pub fn is_virtual_node(&self, node_id: CellId) -> bool {
+        self.virtual_nodes.contains(&node_id)
+    }
+
     /// 创建单向边，对应原C++的CreateEdge方法
     /// 
     /// # ⚠️ 重要：边创建顺序约束
@@ -465,16 +477,16 @@ impl GridSystem {
     /// for cell in all_cells {
     ///     // 按固定顺序为每个单元格创建边：东、南、西、北
     ///     if let Some(east) = get_east_neighbor(cell) {
-    ///         grid.create_edge(cell, east)?;  // 1. 东向边
+    ///         grid.create_edge(cell, Some(east))?;  // 1. 东向边
     ///     }
     ///     if let Some(south) = get_south_neighbor(cell) {
-    ///         grid.create_edge(cell, south)?; // 2. 南向边
+    ///         grid.create_edge(cell, Some(south))?; // 2. 南向边
     ///     }
     ///     if let Some(west) = get_west_neighbor(cell) {
-    ///         grid.create_edge(cell, west)?;  // 3. 西向边
+    ///         grid.create_edge(cell, Some(west))?;  // 3. 西向边
     ///     }
     ///     if let Some(north) = get_north_neighbor(cell) {
-    ///         grid.create_edge(cell, north)?; // 4. 北向边
+    ///         grid.create_edge(cell, Some(north))?; // 4. 北向边
     ///     }
     /// }
     /// #     Ok(())
@@ -490,8 +502,8 @@ impl GridSystem {
     /// # let cell_a = grid.add_cell(Default::default());
     /// # let cell_b = grid.add_cell(Default::default());
     /// // ❌ 错误：随意创建边会破坏方向识别
-    /// grid.create_edge(cell_a, cell_b)?;
-    /// grid.create_edge(cell_b, cell_a)?; // 顺序可能不正确
+    /// grid.create_edge(cell_a, Some(cell_b))?;
+    /// grid.create_edge(cell_b, Some(cell_a))?; // 顺序可能不正确
     /// # Ok::<(), GridError>(())
     /// ```
     /// 
@@ -506,7 +518,7 @@ impl GridSystem {
     /// # 参数
     /// 
     /// * `from` - 源单元格ID
-    /// * `to` - 目标单元格ID
+    /// * `to` - 目标单元格ID，None表示边界虚拟节点
     /// 
     /// # 返回值
     /// 
@@ -517,29 +529,41 @@ impl GridSystem {
     /// 
     /// - `GridError::SelfLoop` - 尝试创建自循环边
     /// - `GridError::EdgeAlreadyExists` - 边已存在
-    /// - `GridError::NodeNotFound` - 源或目标节点不存在
-    pub fn create_edge(&mut self, from: CellId, to: CellId) -> Result<EdgeId, GridError> {
-        // 检查自循环
-        if from == to {
-            return Err(GridError::SelfLoop);
-        }
-
-        // 检查节点是否存在
+    /// - `GridError::NodeNotFound` - 源节点不存在
+    pub fn create_edge(&mut self, from: CellId, to: Option<CellId>) -> Result<EdgeId, GridError> {
+        // 检查from节点是否存在
         if !self.graph.node_indices().any(|n| n == from) {
             return Err(GridError::NodeNotFound);
         }
-        if !self.graph.node_indices().any(|n| n == to) {
-            return Err(GridError::NodeNotFound);
+
+        let target_node = match to {
+            Some(real_to) => {
+                // 检查真实目标节点是否存在
+                if !self.graph.node_indices().any(|n| n == real_to) {
+                    return Err(GridError::NodeNotFound);
+                }
+                real_to
+            }
+            None => {
+                // 创建虚拟节点
+                let virtual_node = self.graph.add_node(Cell::with_name("__VIRTUAL__".to_string()));
+                self.virtual_nodes.insert(virtual_node);
+                virtual_node
+            }
+        };
+
+        // 检查自循环
+        if from == target_node {
+            return Err(GridError::SelfLoop);
         }
 
         // 检查边是否已存在（单向检查）
-        if self.graph.find_edge(from, to).is_some() {
+        if self.graph.find_edge(from, target_node).is_some() {
             return Err(GridError::EdgeAlreadyExists);
         }
 
-        // 创建单向边：from指向to
-        // 这与C++的CreateEdge(cellA, cellB)语义一致
-        let edge_id = self.graph.add_edge(from, to, GraphEdge::new());
+        // 创建单向边：from指向target_node
+        let edge_id = self.graph.add_edge(from, target_node, GraphEdge::new());
         Ok(edge_id)
     }
 
@@ -769,12 +793,16 @@ mod tests {
                     
                     // 连接到右边
                     if x + 1 < self.width {
-                        grid.create_edge(current, cells[y][x + 1])?;
+                        grid.create_edge(current, Some(cells[y][x + 1]))?;
+                    } else {
+                        grid.create_edge(current, None)?;
                     }
                     
                     // 连接到下面
                     if y + 1 < self.height {
-                        grid.create_edge(current, cells[y + 1][x])?;
+                        grid.create_edge(current, Some(cells[y + 1][x]))?;
+                    } else {
+                        grid.create_edge(current, None)?;
                     }
                 }
             }
@@ -809,7 +837,7 @@ mod tests {
         assert_eq!(grid.get_cells_count(), 2);
         
         // 创建边
-        let _edge = grid.create_edge(cell1, cell2).unwrap();
+        let _edge = grid.create_edge(cell1, Some(cell2)).unwrap();
         assert_eq!(grid.get_edges_count(), 1);
         
         // 检查邻居
@@ -833,8 +861,8 @@ mod tests {
         let east = cells[0][1];
         let south = cells[1][0];
         
-        grid.create_edge(center, east).unwrap();  // 东向边
-        grid.create_edge(center, south).unwrap(); // 南向边
+        grid.create_edge(center, Some(east)).unwrap();  // 东向边
+        grid.create_edge(center, Some(south)).unwrap(); // 南向边
         
         // 测试方向查询
         assert_eq!(grid.get_neighbor_by_direction(center, Direction4::East), Some(east));
@@ -850,12 +878,12 @@ mod tests {
         let cell1 = grid.add_cell(Cell::new());
         
         // 测试自循环错误
-        assert_eq!(grid.create_edge(cell1, cell1), Err(GridError::SelfLoop));
+        assert_eq!(grid.create_edge(cell1, Some(cell1)), Err(GridError::SelfLoop));
         
         // 测试重复边错误
         let cell2 = grid.add_cell(Cell::new());
-        grid.create_edge(cell1, cell2).unwrap();
-        assert_eq!(grid.create_edge(cell1, cell2), Err(GridError::EdgeAlreadyExists));
+        grid.create_edge(cell1, Some(cell2)).unwrap();
+        assert_eq!(grid.create_edge(cell1, Some(cell2)), Err(GridError::EdgeAlreadyExists));
     }
 
     #[test]
@@ -873,7 +901,7 @@ mod tests {
         
         let cell1 = grid.add_cell(Cell::new());
         let cell2 = grid.add_cell(Cell::new());
-        grid.create_edge(cell1, cell2).unwrap();
+        grid.create_edge(cell1, Some(cell2)).unwrap();
         
         // 验证应该成功
         assert!(grid.validate_structure().is_ok());
