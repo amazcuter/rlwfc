@@ -1,7 +1,118 @@
-//! # RLWFC - Rust Wave Function Collapse Library
+//! # RLWFC - Rust版本的波函数塌缩（Wave Function Collapse）算法库
 //! 
-//! 这是一个基于Rust实现的Wave Function Collapse (WFC)算法库，
-//! 使用petgraph作为底层图数据结构，提供类型安全和高性能的WFC实现。
+//! 这是一个用Rust实现的波函数塌缩算法库，从C++版本迁移而来。
+//! 使用petgraph作为底层图结构，提供高性能和类型安全的WFC实现。
+//! 
+//! ## 核心特性
+//! 
+//! - **类型安全**：使用Rust类型系统确保编译时安全
+//! - **高性能**：基于petgraph的优化图操作
+//! - **可扩展**：支持不同类型的网格和约束
+//! - **内存安全**：利用Rust的所有权系统避免内存错误
+//! 
+//! ## ⚠️ 重要设计约束：边创建顺序
+//! 
+//! 本库的核心设计基于一个关键约束：**边创建的全局一致顺序**。
+//! 
+//! ### 为什么这很重要？
+//! 
+//! - **方向识别**：WFC算法需要识别邻居的相对方向
+//! - **无向连接**：WFC本质上需要无向连接，但我们使用有向图实现
+//! - **技术实现**：通过petgraph的neighbor返回顺序实现方向识别
+//! 
+//! ### 基本使用原则
+//! 
+//! ```rust,no_run
+//! use rlwfc::{GridSystem, GridBuilder, Direction4, GridError};
+//! 
+//! // ✅ 正确：在GridBuilder实现中按固定顺序创建边
+//! struct My2DGrid;
+//! impl GridBuilder for My2DGrid {
+//!     fn build_grid_system(&mut self, grid: &mut GridSystem) -> Result<(), GridError> {
+//!         // 为每个单元格按相同顺序创建边：东、南、西、北
+//!         // 这样neighbors()返回 [北, 西, 南, 东] (逆序)
+//!         # Ok(())
+//!     }
+//!     # fn get_dimensions(&self) -> Vec<usize> { vec![2, 2] }
+//!     # fn get_grid_type_name(&self) -> &'static str { "My2D" }
+//! }
+//! 
+//! // ❌ 错误：直接调用create_edge而不考虑顺序
+//! let mut grid = GridSystem::new();
+//! // 这样做会破坏方向识别系统
+//! ```
+//! 
+//! ### 为什么不提供便捷方法？
+//! 
+//! 本库故意**不提供**诸如`create_undirected_connection()`的便捷方法，因为：
+//! 
+//! 1. **顺序破坏**：自动双向连接可能破坏全局边创建顺序
+//! 2. **应用层责任**：正确的网格构建逻辑应由具体的GridBuilder实现
+//! 3. **错误预防**：通过设计约束防止错误使用
+//! 
+//! ### 瓷砖边数据顺序约定
+//! 
+//! 同样重要的是，**瓷砖的边数据必须严格按照相同的顺序排列**：
+//! 
+//! ```rust,no_run
+//! use rlwfc::TileSet;
+//! 
+//! let mut tile_set = TileSet::new();
+//! 
+//! // ✅ 正确：瓷砖边数据按 [北, 西, 南, 东] 顺序排列
+//! tile_set.add_tile(vec![
+//!     "forest",  // 北边数据 (索引 0)
+//!     "water",   // 西边数据 (索引 1)  
+//!     "grass",   // 南边数据 (索引 2)
+//!     "stone",   // 东边数据 (索引 3)
+//! ], 10);
+//! 
+//! // ❌ 错误：任意顺序会破坏兼容性检查
+//! tile_set.add_tile(vec!["stone", "forest", "water", "grass"], 5);
+//! ```
+//! 
+//! 这确保了：
+//! - 直接索引对应：`tile.edges[i]` 对应 `neighbors()[i]` 的方向
+//! - 高效兼容性检查：无需运行时映射转换
+//! - 统一的系统约定：网格和瓷砖使用相同的索引语义
+//! 
+//! ## 基本使用示例
+//! 
+//! ```rust,no_run
+//! use rlwfc::{GridSystem, GridBuilder, TileSet, WfcUtil, Direction4};
+//! 
+//! // 1. 创建网格系统
+//! let mut grid = GridSystem::new();
+//! let mut builder = My2DGrid::new(3, 3);
+//! builder.build_grid_system(&mut grid)?;
+//! 
+//! // 2. 设置瓦片和约束
+//! let mut tile_set = TileSet::new();
+//! // 添加瓦片和兼容性规则...
+//! 
+//! // 3. 初始化WFC
+//! let mut wfc = WfcUtil::new();
+//! wfc.initialize(&grid, &tile_set)?;
+//! 
+//! // 4. 运行算法
+//! let result = wfc.solve()?;
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+//! 
+//! ## 模块结构
+//! 
+//! - [`grid_system`] - 网格管理和图结构操作
+//! - [`wfc_util`] - WFC算法核心实现  
+//! - [`tile_set`] - 瓦片管理和兼容性规则
+//! - [`Cell`] - 单元格数据结构
+//! - [`Tile`] - 瓦片数据结构
+//! 
+//! ## 设计哲学
+//! 
+//! 1. **最小可行设计**：只包含必要功能，避免过度工程化
+//! 2. **应用层控制**：具体的网格构建逻辑由应用层决定
+//! 3. **类型安全**：利用Rust类型系统防止运行时错误
+//! 4. **可组合性**：支持不同组件的灵活组合
 //! 
 //! ## 库概述
 //! 
@@ -214,6 +325,7 @@
 pub mod wfc_util;
 pub mod grid_system;
 pub mod tile_set;
+pub mod wfc_manager;
 
 // 重新导出主要类型，方便使用
 pub use wfc_util::{
@@ -235,3 +347,7 @@ pub use wfc_util::{
 
 pub use grid_system::{GridSystem, GridBuilder}; 
 pub use tile_set::{TileSetVirtual, TileSet}; 
+pub use wfc_manager::{
+    WfcManager, WfcInitializer, DefaultInitializer, 
+    CellState, CellWfcData, WfcConfig, WfcError, StepResult
+}; 

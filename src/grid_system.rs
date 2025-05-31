@@ -139,6 +139,28 @@ use std::collections::HashMap;
 /// 这个trait定义了构建不同类型网格的统一接口。每个具体的网格类型
 /// （如2D正交网格、六角形网格、3D网格等）都应该实现这个trait。
 /// 
+/// # ⚠️ 关键约束：边创建顺序
+/// 
+/// 实现者**必须确保**为每个单元格按**相同的方向顺序**创建边，这对
+/// 方向识别系统的正确性至关重要。
+/// 
+/// ## 边创建顺序的重要性
+/// 
+/// - **方向识别依赖**：`Direction4::to_neighbor_index()` 的映射依赖于固定的边创建顺序
+/// - **petgraph特性**：利用 `neighbors()` 返回逆序的稳定性
+/// - **全局一致性**：所有单元格必须使用相同的边创建顺序
+/// 
+/// ## 推荐的边创建顺序
+/// 
+/// 对于2D网格，推荐按以下顺序为每个单元格创建边：
+/// 
+/// 1. **东向边** (East) - 如果有东邻居
+/// 2. **南向边** (South) - 如果有南邻居  
+/// 3. **西向边** (West) - 如果有西邻居
+/// 4. **北向边** (North) - 如果有北邻居
+/// 
+/// 这样 `neighbors()` 将返回 `[北, 西, 南, 东]` (逆序)，符合 `Direction4` 的索引映射。
+/// 
 /// ## 与原C++设计的对比
 /// 
 /// | 特性 | C++ | Rust |
@@ -154,7 +176,7 @@ use std::collections::HashMap;
 /// 实现这个trait时，`build_grid_system`方法应该：
 /// 
 /// 1. 创建所有需要的单元格
-/// 2. 建立单元格之间的连接关系
+/// 2. **按固定顺序**建立单元格之间的连接关系
 /// 3. 设置特定网格类型的属性
 /// 4. 返回构建结果（成功或错误）
 /// 
@@ -163,12 +185,12 @@ use std::collections::HashMap;
 /// ```rust,no_run
 /// use rlwfc::{GridSystem, GridBuilder, GridError, Cell};
 /// 
-/// struct SimpleGridBuilder {
+/// struct Simple2DGrid {
 ///     width: usize,
 ///     height: usize,
 /// }
 /// 
-/// impl GridBuilder for SimpleGridBuilder {
+/// impl GridBuilder for Simple2DGrid {
 ///     fn build_grid_system(&mut self, grid: &mut GridSystem) -> Result<(), GridError> {
 ///         // 1. 创建所有单元格
 ///         let mut cells = vec![vec![]; self.height];
@@ -183,19 +205,31 @@ use std::collections::HashMap;
 ///             }
 ///         }
 /// 
-///         // 2. 创建连接
+///         // 2. 按固定顺序创建连接 - 这是关键！
 ///         for y in 0..self.height {
 ///             for x in 0..self.width {
 ///                 let current = cells[y][x];
 ///                 
-///                 // 连接到右边
+///                 // 必须按相同顺序为每个单元格创建边
+///                 
+///                 // 1. 东向边
 ///                 if x + 1 < self.width {
 ///                     grid.create_edge(current, cells[y][x + 1])?;
 ///                 }
 ///                 
-///                 // 连接到下面
+///                 // 2. 南向边
 ///                 if y + 1 < self.height {
 ///                     grid.create_edge(current, cells[y + 1][x])?;
+///                 }
+///                 
+///                 // 3. 西向边
+///                 if x > 0 {
+///                     grid.create_edge(current, cells[y][x - 1])?;
+///                 }
+///                 
+///                 // 4. 北向边
+///                 if y > 0 {
+///                     grid.create_edge(current, cells[y - 1][x])?;
 ///                 }
 ///             }
 ///         }
@@ -208,7 +242,7 @@ use std::collections::HashMap;
 ///     }
 ///     
 ///     fn get_grid_type_name(&self) -> &'static str {
-///         "SimpleGrid"
+///         "Simple2DGrid"
 ///     }
 /// }
 /// ```
@@ -409,8 +443,81 @@ impl GridSystem {
 
     /// 创建单向边，对应原C++的CreateEdge方法
     /// 
-    /// 这是方向感知的关键：只创建单向边，方向由from->to确定
-    /// 与C++的CreateEdge(cellA, cellB)语义完全一致
+    /// # ⚠️ 重要：边创建顺序约束
+    /// 
+    /// 这个方法创建的是单向边，用于构建WFC系统需要的无向连接。为了确保
+    /// 方向识别系统正常工作，**必须按全局一致的顺序**为每个单元格创建边。
+    /// 
+    /// ## 设计原理
+    /// 
+    /// - **无向连接**：WFC系统需要双向可达的连接
+    /// - **方向识别**：通过边创建顺序和petgraph的逆序返回特性实现
+    /// - **边对需求**：每个无向连接需要两条相对的有向边（A→B 和 B→A）
+    /// 
+    /// ## 正确使用模式
+    /// 
+    /// ```rust,no_run
+    /// # use rlwfc::{GridSystem, GridBuilder, GridError};
+    /// # struct MyBuilder;
+    /// # impl GridBuilder for MyBuilder {
+    /// #   fn build_grid_system(&mut self, grid: &mut GridSystem) -> Result<(), GridError> {
+    /// // ✅ 正确：在GridBuilder中按全局一致顺序创建边
+    /// for cell in all_cells {
+    ///     // 按固定顺序为每个单元格创建边：东、南、西、北
+    ///     if let Some(east) = get_east_neighbor(cell) {
+    ///         grid.create_edge(cell, east)?;  // 1. 东向边
+    ///     }
+    ///     if let Some(south) = get_south_neighbor(cell) {
+    ///         grid.create_edge(cell, south)?; // 2. 南向边
+    ///     }
+    ///     if let Some(west) = get_west_neighbor(cell) {
+    ///         grid.create_edge(cell, west)?;  // 3. 西向边
+    ///     }
+    ///     if let Some(north) = get_north_neighbor(cell) {
+    ///         grid.create_edge(cell, north)?; // 4. 北向边
+    ///     }
+    /// }
+    /// #     Ok(())
+    /// #   }
+    /// # }
+    /// ```
+    /// 
+    /// ## ❌ 错误使用模式
+    /// 
+    /// ```rust,no_run
+    /// # use rlwfc::{GridSystem, CellId, GridError};
+    /// # let mut grid = GridSystem::new();
+    /// # let cell_a = grid.add_cell(Default::default());
+    /// # let cell_b = grid.add_cell(Default::default());
+    /// // ❌ 错误：随意创建边会破坏方向识别
+    /// grid.create_edge(cell_a, cell_b)?;
+    /// grid.create_edge(cell_b, cell_a)?; // 顺序可能不正确
+    /// # Ok::<(), GridError>(())
+    /// ```
+    /// 
+    /// ## 为什么不提供自动双向连接方法
+    /// 
+    /// 本库故意不提供 `create_undirected_connection()` 等便捷方法，因为：
+    /// 
+    /// 1. **顺序依赖**：方向识别完全依赖边创建的全局一致顺序
+    /// 2. **应用层责任**：正确的边创建顺序只能由具体的网格构建逻辑确定
+    /// 3. **错误预防**：避免提供可能破坏顺序一致性的便捷方法
+    /// 
+    /// # 参数
+    /// 
+    /// * `from` - 源单元格ID
+    /// * `to` - 目标单元格ID
+    /// 
+    /// # 返回值
+    /// 
+    /// * `Ok(EdgeId)` - 成功创建的边ID
+    /// * `Err(GridError)` - 创建失败的错误信息
+    /// 
+    /// # 错误情况
+    /// 
+    /// - `GridError::SelfLoop` - 尝试创建自循环边
+    /// - `GridError::EdgeAlreadyExists` - 边已存在
+    /// - `GridError::NodeNotFound` - 源或目标节点不存在
     pub fn create_edge(&mut self, from: CellId, to: CellId) -> Result<EdgeId, GridError> {
         // 检查自循环
         if from == to {

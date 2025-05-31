@@ -1,0 +1,117 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'rlwfc'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=rlwfc",
+                    "--package=rlwfc"
+                ],
+                "filter": {
+                    "name": "rlwfc",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=rlwfc"
+                ],
+                "filter": {
+                    "name": "rlwfc",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example: basic_usage",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=basic_usage"
+                ],
+                "filter": {
+                    "name": "basic_usage",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example: orthogonal_2d_wfc",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=orthogonal_2d_wfc"
+                ],
+                "filter": {
+                    "name": "orthogonal_2d_wfc",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example: tile_system_demo",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tile_system_demo"
+                ],
+                "filter": {
+                    "name": "tile_system_demo",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example: grid_builder_demo",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=grid_builder_demo"
+                ],
+                "filter": {
+                    "name": "grid_builder_demo",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "example",
+            "description": "Which example to debug?",
+            "type": "promptString"
+        }
+    ]
+} 

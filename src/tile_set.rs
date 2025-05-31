@@ -46,12 +46,82 @@
 //! // 创建瓷砖集
 //! let mut tile_set = TileSet::new();
 //! 
-//! // 添加瓷砖
-//! let tile_id = tile_set.add_tile(vec!["A", "B", "C", "D"], 10);
+//! // ⚠️ 重要：边数据必须按 neighbors() 返回顺序排列
+//! let tile_edges = vec![
+//!     "北边数据",  // 索引 0 - 对应 neighbors()[0] (北方向)
+//!     "西边数据",  // 索引 1 - 对应 neighbors()[1] (西方向)  
+//!     "南边数据",  // 索引 2 - 对应 neighbors()[2] (南方向)
+//!     "东边数据",  // 索引 3 - 对应 neighbors()[3] (东方向)
+//! ];
+//! let tile_id = tile_set.add_tile(tile_edges, 10);
 //! 
 //! // 获取瓷砖
 //! if let Some(tile) = tile_set.get_tile(tile_id) {
 //!     println!("Tile weight: {}", tile.weight);
+//! }
+//! ```
+//! 
+//! ### ⚠️ **关键设计约束：瓷砖边数据顺序**
+//! 
+//! 瓷砖的边数据顺序必须与网格系统的 `neighbors()` 返回顺序**严格一致**：
+//! 
+//! #### 顺序对应关系
+//! 
+//! ```text
+//! 网格边创建顺序：东 → 南 → 西 → 北
+//! neighbors() 返回：[北, 西, 南, 东] (petgraph 逆序特性)
+//! 瓷砖边数据索引：[0,  1,  2,  3]
+//! 方向到索引映射：北=0, 西=1, 南=2, 东=3
+//! ```
+//! 
+//! #### 为什么这很重要？
+//! 
+//! 1. **直接索引对应**：`judge_possibility()` 中可以直接用索引访问对应方向的边数据
+//! 2. **高效兼容性检查**：无需额外的方向映射转换
+//! 3. **统一约定**：网格系统和瓷砖系统使用相同的索引语义
+//! 4. **零成本抽象**：运行时无额外开销
+//! 
+//! #### 正确的瓷砖创建模式
+//! 
+//! ```rust
+//! use rlwfc::TileSet;
+//! 
+//! let mut tile_set = TileSet::new();
+//! 
+//! // ✅ 正确：按 neighbors() 顺序排列边数据
+//! tile_set.add_tile(vec![
+//!     "grass",  // 北边 (索引 0)
+//!     "water",  // 西边 (索引 1)
+//!     "grass",  // 南边 (索引 2)  
+//!     "water",  // 东边 (索引 3)
+//! ], 10);
+//! 
+//! // ❌ 错误：随意排列会破坏方向对应关系
+//! tile_set.add_tile(vec![
+//!     "water",  // 这样的顺序无法与 neighbors() 正确对应
+//!     "grass", 
+//!     "water",
+//!     "grass",
+//! ], 10);
+//! ```
+//! 
+//! #### 在 judge_possibility() 中的应用
+//! 
+//! ```rust
+//! fn judge_possibility(
+//!     &self,
+//!     neighbor_possibilities: &[Vec<TileId>],
+//!     candidate: TileId
+//! ) -> bool {
+//!     let candidate_tile = self.get_tile(candidate).unwrap();
+//!     
+//!     for (direction_index, neighbor_tiles) in neighbor_possibilities.iter().enumerate() {
+//!         // 🎯 直接通过索引获取对应方向的边数据
+//!         let candidate_edge = &candidate_tile.edges[direction_index];
+//!         
+//!         // 检查与邻居的兼容性...
+//!     }
+//!     true
 //! }
 //! ```
 //! 
@@ -255,11 +325,91 @@ where
     /// 这是WFC算法的核心约束判断方法。它决定了在给定邻居约束的情况下，
     /// 某个候选瓷砖是否可以放置在当前位置。
     /// 
+    /// # ⚠️ 重要：利用边数据顺序约定
+    /// 
+    /// 由于瓷砖的边数据严格按照 `neighbors()` 返回顺序排列，
+    /// 本方法可以直接通过索引访问对应方向的边数据，实现高效的兼容性检查。
+    /// 
+    /// ## 索引到方向的直接映射
+    /// 
+    /// ```text
+    /// neighbor_possibilities[0] <-> candidate_tile.edges[0] (北方向)
+    /// neighbor_possibilities[1] <-> candidate_tile.edges[1] (西方向)
+    /// neighbor_possibilities[2] <-> candidate_tile.edges[2] (南方向)
+    /// neighbor_possibilities[3] <-> candidate_tile.edges[3] (东方向)
+    /// ```
+    /// 
+    /// ## 高效实现模式
+    /// 
+    /// ```rust,no_run
+    /// # use rlwfc::TileId;
+    /// # struct MySelf;
+    /// # impl MySelf { fn get_tile(&self, id: TileId) -> Option<&crate::Tile<&str>> { None } }
+    /// # impl MySelf {
+    /// fn judge_possibility(
+    ///     &self,
+    ///     neighbor_possibilities: &[Vec<TileId>],
+    ///     candidate: TileId
+    /// ) -> bool {
+    ///     let Some(candidate_tile) = self.get_tile(candidate) else {
+    ///         return false;  // 候选瓷砖不存在
+    ///     };
+    ///     
+    ///     // 遍历每个方向的邻居约束
+    ///     for (direction_index, neighbor_tiles) in neighbor_possibilities.iter().enumerate() {
+    ///         if neighbor_tiles.is_empty() {
+    ///             continue;  // 该方向无约束，跳过
+    ///         }
+    ///         
+    ///         // 🎯 直接通过索引获取候选瓷砖在该方向的边数据
+    ///         let candidate_edge = &candidate_tile.edges[direction_index];
+    ///         
+    ///         // 检查是否与该方向的任一邻居瓷砖兼容
+    ///         let is_compatible = neighbor_tiles.iter().any(|&neighbor_id| {
+    ///             if let Some(neighbor_tile) = self.get_tile(neighbor_id) {
+    ///                 // 计算邻居瓷砖相对方向的索引
+    ///                 let opposite_index = match direction_index {
+    ///                     0 => 2,  // 北 ↔ 南
+    ///                     1 => 3,  // 西 ↔ 东
+    ///                     2 => 0,  // 南 ↔ 北  
+    ///                     3 => 1,  // 东 ↔ 西
+    ///                     _ => return false,  // 无效索引
+    ///                 };
+    ///                 
+    ///                 // 🎯 直接获取邻居瓷砖相对方向的边数据
+    ///                 let neighbor_edge = &neighbor_tile.edges[opposite_index];
+    ///                 
+    ///                 // 执行边兼容性检查（具体规则由应用定义）
+    ///                 candidate_edge == neighbor_edge  // 或其他兼容性逻辑
+    ///             } else {
+    ///                 false  // 邻居瓷砖不存在
+    ///             }
+    ///         });
+    ///         
+    ///         if !is_compatible {
+    ///             return false;  // 该方向不兼容，候选瓷砖不可用
+    ///         }
+    ///     }
+    ///     
+    ///     true  // 所有方向都兼容，候选瓷砖可用
+    /// }
+    /// # }
+    /// ```
+    /// 
+    /// ## 性能优势
+    /// 
+    /// 通过边数据顺序约定，该方法获得了显著的性能优势：
+    /// 
+    /// 1. **零成本索引映射**：无需运行时的方向转换或查找表
+    /// 2. **O(1) 边数据访问**：直接数组索引，最高效的访问方式
+    /// 3. **缓存友好**：连续的内存访问模式，提高CPU缓存命中率
+    /// 4. **编译时优化**：编译器可以更好地优化索引访问代码
+    /// 
     /// # 参数
     /// 
     /// * `neighbor_possibilities` - 邻居单元格的可能瓷砖列表数组
     ///   - 每个元素是一个邻居的可能瓷砖ID列表
-    ///   - 数组的顺序通常对应方向顺序（如：东、南、西、北）
+    ///   - 数组的顺序对应方向顺序：[北, 西, 南, 东]
     ///   - 空列表表示该方向没有邻居或邻居未确定
     /// 
     /// * `candidate` - 候选瓷砖的ID
@@ -269,14 +419,23 @@ where
     /// * `true` - 该瓷砖在当前邻居约束下是可能的
     /// * `false` - 该瓷砖与邻居约束冲突，不能放置
     /// 
+    /// # 错误情况
+    /// 
+    /// 实现者应该处理以下错误情况：
+    /// 
+    /// - 候选瓷砖ID无效（不存在对应的瓷砖）
+    /// - 邻居瓷砖ID无效
+    /// - 边数据索引越界（瓷砖边数量不足）
+    /// 
     /// ## 算法逻辑
     /// 
     /// 典型的实现流程：
     /// 
-    /// 1. **获取候选瓷砖**：根据candidate ID获取瓷砖数据
-    /// 2. **遍历邻居方向**：检查每个方向的约束
-    /// 3. **兼容性检查**：验证候选瓷砖的边与邻居瓷砖的边是否兼容
-    /// 4. **返回结果**：所有方向都兼容则返回true，否则返回false
+    /// 1. **验证候选瓷砖**：确认候选瓷砖存在且有效
+    /// 2. **遍历方向约束**：检查每个方向的邻居约束
+    /// 3. **获取边数据**：直接通过索引获取对应方向的边数据
+    /// 4. **兼容性检查**：验证候选瓷砖的边与邻居瓷砖的边是否兼容
+    /// 5. **返回结果**：所有方向都兼容则返回true，否则返回false
     /// 
     /// ## 性能考虑
     /// 
@@ -285,52 +444,21 @@ where
     /// - 考虑缓存计算结果
     /// - 优先检查最容易失败的约束
     /// - 使用快速的边比较算法
-    /// 
-    /// ## 示例实现
-    /// 
-    /// ```rust,no_run
-    /// # use rlwfc::{TileSet, TileId};
-    /// # struct MySelf { tiles: TileSet<&'static str> }
-    /// # impl MySelf {
-    /// fn judge_possibility(
-    ///     &self,
-    ///     neighbor_possibilities: &[Vec<TileId>],
-    ///     candidate: TileId
-    /// ) -> bool {
-    ///     // 1. 获取候选瓷砖
-    ///     let Some(candidate_tile) = self.tiles.get_tile(candidate) else {
-    ///         return false;  // 瓷砖不存在
-    ///     };
-    ///     
-    ///     // 2. 检查每个方向的约束
-    ///     for (direction, neighbor_tiles) in neighbor_possibilities.iter().enumerate() {
-    ///         if neighbor_tiles.is_empty() {
-    ///             continue;  // 该方向无约束
-    ///         }
-    ///         
-    ///         // 3. 检查是否与任一邻居瓷砖兼容
-    ///         let is_compatible = neighbor_tiles.iter().any(|&neighbor_id| {
-    ///             if let Some(neighbor_tile) = self.tiles.get_tile(neighbor_id) {
-    ///                 candidate_tile.is_compatible_with(neighbor_tile, direction)
-    ///             } else {
-    ///                 false
-    ///             }
-    ///         });
-    ///         
-    ///         if !is_compatible {
-    ///             return false;  // 该方向不兼容
-    ///         }
-    ///     }
-    ///     
-    ///     true  // 所有方向都兼容
-    /// }
-    /// # }
-    /// ```
+    /// - 利用边数据顺序约定避免额外的映射开销
     fn judge_possibility(
         &self,
         neighbor_possibilities: &[Vec<TileId>],
         candidate: TileId
     ) -> bool;
+
+    /// 获取指定ID的瓷砖
+    fn get_tile(&self, tile_id: TileId) -> Option<&Tile<EdgeData>>;
+    
+    /// 获取瓷砖总数
+    fn get_tile_count(&self) -> usize;
+    
+    /// 获取所有瓷砖ID列表
+    fn get_all_tile_ids(&self) -> Vec<TileId>;
 }
 
 // =============================================================================
@@ -360,12 +488,116 @@ where
 
     /// 添加瓷砖 - 对应C++的addTile方法
     /// 
+    /// # ⚠️ 重要：边数据顺序约束
+    /// 
+    /// 传入的 `edges` 向量必须严格按照 `neighbors()` 返回顺序排列，
+    /// 即：**[北, 西, 南, 东]** 的顺序。
+    /// 
+    /// ## 顺序约定的重要性
+    /// 
+    /// 这个顺序约定确保了：
+    /// 
+    /// 1. **直接索引映射**：`judge_possibility()` 中可以直接通过索引访问对应方向的边数据
+    /// 2. **零成本抽象**：无需运行时的方向转换
+    /// 3. **统一语义**：网格系统和瓷砖系统使用相同的索引语义
+    /// 4. **高效兼容性检查**：O(1) 时间复杂度的边数据访问
+    /// 
+    /// ## 索引到方向的映射
+    /// 
+    /// ```text
+    /// edges[0] -> 北方向的边数据 (对应 neighbors()[0])
+    /// edges[1] -> 西方向的边数据 (对应 neighbors()[1])  
+    /// edges[2] -> 南方向的边数据 (对应 neighbors()[2])
+    /// edges[3] -> 东方向的边数据 (对应 neighbors()[3])
+    /// ```
+    /// 
+    /// ## 正确使用示例
+    /// 
+    /// ```rust
+    /// use rlwfc::TileSet;
+    /// 
+    /// let mut tile_set = TileSet::new();
+    /// 
+    /// // ✅ 正确：按照 [北, 西, 南, 东] 顺序排列
+    /// tile_set.add_tile(vec![
+    ///     "forest",  // 北边：与北邻居连接的边
+    ///     "water",   // 西边：与西邻居连接的边
+    ///     "grass",   // 南边：与南邻居连接的边
+    ///     "stone",   // 东边：与东邻居连接的边
+    /// ], 10);
+    /// 
+    /// // ❌ 错误：任意顺序会破坏方向对应关系
+    /// tile_set.add_tile(vec![
+    ///     "stone",   // 这样排列无法正确对应方向
+    ///     "grass",
+    ///     "water", 
+    ///     "forest",
+    /// ], 5);
+    /// ```
+    /// 
+    /// ## 在兼容性判断中的应用
+    /// 
+    /// 正确的边数据顺序使得兼容性判断变得高效：
+    /// 
+    /// ```rust,no_run
+    /// # use rlwfc::{TileSetVirtual, TileId};
+    /// # struct MySelf;
+    /// # impl MySelf { fn get_tile(&self, id: TileId) -> Option<&crate::Tile<&str>> { None } }
+    /// # impl MySelf {
+    /// fn judge_possibility(
+    ///     &self,
+    ///     neighbor_possibilities: &[Vec<TileId>],
+    ///     candidate: TileId
+    /// ) -> bool {
+    ///     let candidate_tile = self.get_tile(candidate)?;
+    ///     
+    ///     for (direction_index, neighbor_tiles) in neighbor_possibilities.iter().enumerate() {
+    ///         // 🎯 直接获取候选瓷砖在该方向的边数据
+    ///         let candidate_edge = &candidate_tile.edges[direction_index];
+    ///         
+    ///         // 检查与该方向所有可能邻居的兼容性
+    ///         let is_compatible = neighbor_tiles.iter().any(|&neighbor_id| {
+    ///             if let Some(neighbor_tile) = self.get_tile(neighbor_id) {
+    ///                 // 获取邻居瓷砖相对方向的边数据
+    ///                 let opposite_index = match direction_index {
+    ///                     0 => 2,  // 北 ↔ 南
+    ///                     1 => 3,  // 西 ↔ 东
+    ///                     2 => 0,  // 南 ↔ 北  
+    ///                     3 => 1,  // 东 ↔ 西
+    ///                     _ => return false,
+    ///                 };
+    ///                 let neighbor_edge = &neighbor_tile.edges[opposite_index];
+    ///                 
+    ///                 // 边兼容性检查（具体规则由应用定义）
+    ///                 candidate_edge == neighbor_edge
+    ///             } else {
+    ///                 false
+    ///             }
+    ///         });
+    ///         
+    ///         if !is_compatible {
+    ///             return false;
+    ///         }
+    ///     }
+    ///     true
+    /// }
+    /// # }
+    /// ```
+    /// 
     /// # 参数
-    /// * `edges` - 边数据列表
-    /// * `weight` - 瓷砖权重
+    /// 
+    /// * `edges` - 边数据列表，必须按 [北, 西, 南, 东] 顺序排列
+    /// * `weight` - 瓷砖权重，影响在WFC算法中被选择的概率
     /// 
     /// # 返回值
-    /// * 新创建瓷砖的ID
+    /// 
+    /// * 新创建瓷砖的ID，可用于后续的瓷砖引用和查询
+    /// 
+    /// # 性能说明
+    /// 
+    /// - 时间复杂度：O(1) - 直接向量追加
+    /// - 空间复杂度：O(E) - E为边数据的大小
+    /// - 瓷砖ID就是其在内部向量中的索引，查询效率为O(1)
     pub fn add_tile(&mut self, edges: Vec<EdgeData>, weight: i32) -> TileId {
         let tile_id = self.tiles.len();
         let tile = Tile::new(tile_id, weight, edges);
@@ -441,25 +673,37 @@ mod tests {
 
     impl TileSetVirtual<&'static str> for TestTileSet {
         fn build_tile_set(&mut self) {
+            // 构建简单的测试瓷砖集
             self.tiles.clear();
-            
-            // 添加一些测试瓷砖
-            self.tiles.add_tile(vec!["A", "B", "C", "D"], 10);
-            self.tiles.add_tile(vec!["B", "A", "D", "C"], 15);
-            self.tiles.add_tile(vec!["C", "D", "A", "B"], 5);
+            self.tiles.add_tile(vec!["A", "A", "A", "A"], 10);
+            self.tiles.add_tile(vec!["B", "B", "B", "B"], 10);
+            self.tiles.add_tile(vec!["A", "B", "A", "B"], 5);
         }
-
+        
         fn judge_possibility(
             &self,
-            neighbor_possibilities: &[Vec<TileId>],
+            _neighbor_possibilities: &[Vec<TileId>],
             candidate: TileId
         ) -> bool {
-            // 简单的测试实现
-            if let Some(candidate_tile) = self.tiles.get_tile(candidate) {
-                !neighbor_possibilities.is_empty() && candidate_tile.weight > 0
-            } else {
-                false
+            // 检查候选瓷砖是否存在
+            if self.tiles.get_tile(candidate).is_none() {
+                return false;
             }
+            
+            // 简单测试实现，存在的瓷砖都兼容
+            true
+        }
+        
+        fn get_tile(&self, tile_id: TileId) -> Option<&Tile<&'static str>> {
+            self.tiles.get_tile(tile_id)
+        }
+        
+        fn get_tile_count(&self) -> usize {
+            self.tiles.get_tile_count()
+        }
+        
+        fn get_all_tile_ids(&self) -> Vec<TileId> {
+            self.tiles.get_all_tile_ids()
         }
     }
 

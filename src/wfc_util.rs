@@ -593,6 +593,75 @@ impl DirectionTrait for Direction4 {
 // =============================================================================
 
 /// 瓷砖类，对应原C++的`Tile<EdgeData>`模板类
+/// 
+/// # ⚠️ 重要：边数据顺序约定
+/// 
+/// 瓷砖的 `edges` 字段必须严格按照网格系统 `neighbors()` 返回的顺序排列：
+/// **[北, 西, 南, 东]**
+/// 
+/// ## 顺序约定的重要性
+/// 
+/// 这个顺序约定是整个WFC系统高效运行的基础：
+/// 
+/// 1. **直接索引映射**：`TileSetVirtual::judge_possibility()` 中可以直接通过索引访问对应方向的边数据
+/// 2. **零成本抽象**：无需运行时的方向映射转换
+/// 3. **统一语义**：网格构建顺序、neighbors()顺序、瓷砖边数据顺序完全对应
+/// 4. **高效兼容性检查**：O(1) 时间复杂度的边数据访问
+/// 
+/// ## 顺序对应关系
+/// 
+/// ```text
+/// 网格边创建顺序：东 → 南 → 西 → 北
+/// neighbors() 返回：[北, 西, 南, 东] (petgraph 逆序特性)
+/// 瓷砖边数据索引：[0,  1,  2,  3]
+/// 方向到索引映射：北=0, 西=1, 南=2, 东=3
+/// ```
+/// 
+/// ## 正确使用示例
+/// 
+/// ```rust
+/// use rlwfc::Tile;
+/// 
+/// // ✅ 正确：按照 [北, 西, 南, 东] 顺序排列
+/// let tile = Tile::new(0, 10, vec![
+///     "forest",  // 北边数据 (索引 0)
+///     "water",   // 西边数据 (索引 1)
+///     "grass",   // 南边数据 (索引 2)  
+///     "stone",   // 东边数据 (索引 3)
+/// ]);
+/// 
+/// // ❌ 错误：任意顺序会破坏兼容性检查
+/// let wrong_tile = Tile::new(1, 5, vec![
+///     "stone",   // 这样的顺序无法与网格正确对应
+///     "forest",
+///     "water", 
+///     "grass",
+/// ]);
+/// ```
+/// 
+/// ## 在兼容性检查中的应用
+/// 
+/// ```rust,no_run
+/// # use rlwfc::{Tile, TileId};
+/// # let candidate_tile = Tile::new(0, 10, vec!["A", "B", "C", "D"]);
+/// # let neighbor_tile = Tile::new(1, 10, vec!["D", "C", "B", "A"]);
+/// # let direction_index = 0;
+/// // 直接通过索引获取对应方向的边数据
+/// let candidate_edge = &candidate_tile.edges[direction_index];
+/// 
+/// // 计算邻居瓷砖相对方向的索引
+/// let opposite_index = match direction_index {
+///     0 => 2,  // 北 ↔ 南
+///     1 => 3,  // 西 ↔ 东
+///     2 => 0,  // 南 ↔ 北
+///     3 => 1,  // 东 ↔ 西
+///     _ => panic!("无效的方向索引"),
+/// };
+/// let neighbor_edge = &neighbor_tile.edges[opposite_index];
+/// 
+/// // 执行兼容性检查
+/// let is_compatible = candidate_edge == neighbor_edge;
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Tile<EdgeData> 
 where 
