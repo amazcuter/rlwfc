@@ -103,8 +103,10 @@ pub struct CellWfcData {
     pub state: CellState,
     /// 香农熵值
     pub entropy: f64,
-    /// 随机数，对应C++的randNum
+    /// 随机种子，对应C++的randNum的种子来源
     pub rand_seed: u64,
+    /// 预计算的随机数，对应C++的randNum
+    pub rand_num: i32,
     /// 可能的瓷砖列表，对应C++的possibility
     pub possibilities: Vec<TileId>,
 }
@@ -112,10 +114,15 @@ pub struct CellWfcData {
 impl CellWfcData {
     /// 创建新的单元格WFC数据
     pub fn new(rand_seed: u64, possibilities: Vec<TileId>) -> Self {
+        // 使用种子生成预计算的随机数，模拟C++的randNum行为
+        let mut rng = StdRng::seed_from_u64(rand_seed);
+        let rand_num = rng.random::<i32>().abs(); // 确保是正数
+        
         Self {
             state: CellState::Uncollapsed,
             entropy: 0.0, // 将在初始化时计算
             rand_seed,
+            rand_num,
             possibilities,
         }
     }
@@ -496,7 +503,7 @@ where
             return Err(WfcError::InvalidTileChoice);
         }
 
-        // 计算总权重
+        // 计算总权重，对应C++的weightSum计算
         let mut total_weight = 0i32;
         for &tile_id in &cell_data.possibilities {
             if let Some(tile) = self.tile_set.get_tile(tile_id) {
@@ -508,21 +515,22 @@ where
             return Ok(cell_data.possibilities[0]); // 如果没有权重，返回第一个
         }
 
-        // 使用单元格的随机种子生成随机数
-        let mut rng = StdRng::seed_from_u64(cell_data.rand_seed);
-        let mut rand_num = rng.random_range(0..total_weight);
-
-        // 选择瓷砖
+        // 使用预计算的随机数，完全对应C++的逻辑
+        // C++: randNum %= weightSum;
+        let rand_num = cell_data.rand_num % total_weight;
+        
+        // C++: 累计权重直到 weightSum >= randNum
+        let mut weight_sum = 0i32;
         for &tile_id in &cell_data.possibilities {
             if let Some(tile) = self.tile_set.get_tile(tile_id) {
-                if rand_num < tile.weight {
+                weight_sum += tile.weight;
+                if weight_sum > rand_num {  // C++: weightSum >= randNum，但我们用>避免边界问题
                     return Ok(tile_id);
                 }
-                rand_num -= tile.weight;
             }
         }
 
-        // 保险措施
+        // 保险措施，理论上不应该到达这里
         Ok(*cell_data.possibilities.last().unwrap())
     }
 

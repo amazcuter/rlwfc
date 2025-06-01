@@ -156,18 +156,52 @@ fn test_wfc_manager_data_structures() {
         assert_eq!(data.state, State::Noncollapsed);
     }
 
+    // 模拟C++中的随机数使用模式
+    // 模拟chooseTileFromProbabilities中的逻辑
+    let test_cell = cells[0];
+    let cell_data = &wfc_cell_data[&test_cell];
+    
+    // 模拟权重计算和随机数使用
+    let tile_weights = vec![10, 15, 5]; // 假设的瓷砖权重
+    let total_weight: i32 = tile_weights.iter().sum();
+    let rand_num_mod = cell_data.rand_num % total_weight; // C++: randNum %= weightSum
+    
+    // 验证随机数在合理范围内
+    assert!(rand_num_mod >= 0);
+    assert!(rand_num_mod < total_weight);
+    
+    println!("模拟随机数选择: rand_num={}, mod_result={}, total_weight={}", 
+             cell_data.rand_num, rand_num_mod, total_weight);
+
     // 模拟坍塌操作
     if let Some(data) = wfc_cell_data.get_mut(&cells[0]) {
         data.state = State::Collapsed;
         data.entropy = 0.0;
         data.possibility = vec![1]; // 选择了瓷砖1
+        // rand_num在坍塌后保持不变，符合C++行为
     }
 
     // 验证状态更新
     assert_eq!(wfc_cell_data[&cells[0]].state, State::Collapsed);
     assert_eq!(wfc_cell_data[&cells[0]].possibility.len(), 1);
-}
+    assert_eq!(wfc_cell_data[&cells[0]].rand_num, 42); // rand_num应该保持不变
 
+    // 模拟冲突状态：当可能性列表为空时设置为 Conflict
+    if let Some(data) = wfc_cell_data.get_mut(&cells[1]) {
+        data.possibility.clear(); // 清空可能性列表，模拟冲突情况
+        data.entropy = 0.0;
+        
+        // 在WFC算法中，当一个单元格的可能性为零时，标记为冲突状态
+        if data.possibility.is_empty() {
+            data.state = State::Conflict;
+            println!("检测到冲突：单元格 {:?} 的可能性为零", cells[1]);
+        }
+    }
+
+    // 验证冲突状态
+    assert_eq!(wfc_cell_data[&cells[1]].state, State::Conflict);
+    assert!(wfc_cell_data[&cells[1]].possibility.is_empty());
+}
 
 /// 模拟C++WFCManager中的传播效果逻辑
 #[test]
