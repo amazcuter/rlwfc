@@ -1,6 +1,6 @@
 [package]
 name = "rlwfc"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["amazcuter <amazcuter@outlook.com>"]
 description = "Rust implementation of Wave Function Collapse (WFC) algorithm with type safety and direction-aware grid system"
