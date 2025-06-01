@@ -230,7 +230,7 @@ where
 
         // 2. 初始化所有单元格
         for cell_id in manager.grid.get_all_cells() {
-            let rand_seed = manager.rng.gen();
+            let rand_seed = manager.rng.random();
             let all_tiles = manager.tile_set.get_all_tile_ids();
             let cell_data = CellWfcData::new(rand_seed, all_tiles);
             manager.wfc_data.insert(cell_id, cell_data);
@@ -286,6 +286,9 @@ where
     rng: StdRng,
     /// 配置参数
     config: WfcConfig,
+    /// 熵值缓存，对应C++的entropyCache
+    #[allow(dead_code)]
+    entropy_cache: HashMap<Vec<TileId>, f64>,
 }
 
 impl<EdgeData> WfcManager<EdgeData>
@@ -300,7 +303,7 @@ where
         let config = WfcConfig::default();
         let seed = config
             .random_seed
-            .unwrap_or_else(|| rand::thread_rng().gen());
+            .unwrap_or_else(|| rand::rng().random());
         let rng = StdRng::seed_from_u64(seed);
 
         Ok(Self {
@@ -309,7 +312,8 @@ where
             wfc_data: HashMap::new(),
             completed_count: 0,
             rng,
-            config
+            config,
+            entropy_cache: HashMap::new(),
         })
     }
 
@@ -321,7 +325,7 @@ where
     ) -> Result<Self, WfcError> {
         let seed = config
             .random_seed
-            .unwrap_or_else(|| rand::thread_rng().gen());
+            .unwrap_or_else(|| rand::rng().random());
         let rng = StdRng::seed_from_u64(seed);
 
         Ok(Self {
@@ -330,7 +334,8 @@ where
             wfc_data: HashMap::new(),
             completed_count: 0,
             rng,
-            config
+            config,
+            entropy_cache: HashMap::new(),
         })
     }
 
@@ -505,7 +510,7 @@ where
 
         // 使用单元格的随机种子生成随机数
         let mut rng = StdRng::seed_from_u64(cell_data.rand_seed);
-        let mut rand_num = rng.gen_range(0..total_weight);
+        let mut rand_num = rng.random_range(0..total_weight);
 
         // 选择瓷砖
         for &tile_id in &cell_data.possibilities {
@@ -979,15 +984,6 @@ mod tests {
         }
     }
 
-    impl TestTileSet {
-        pub fn get_tile(&self, tile_id: TileId) -> Option<&Tile<&'static str>> {
-            self.tiles.get_tile(tile_id)
-        }
-
-        pub fn get_all_tile_ids(&self) -> Vec<TileId> {
-            self.tiles.get_all_tile_ids()
-        }
-    }
 
     #[test]
     fn test_wfc_manager_creation() {

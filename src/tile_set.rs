@@ -726,25 +726,6 @@ mod tests {
         }
     }
 
-    // 为TestTileSet提供代理方法
-    impl TestTileSet {
-        pub fn add_tile(&mut self, edges: Vec<&'static str>, weight: i32) -> TileId {
-            self.tiles.add_tile(edges, weight)
-        }
-
-        pub fn get_all_tiles(&self) -> &[Tile<&'static str>] {
-            self.tiles.get_all_tiles()
-        }
-
-        pub fn get_tile(&self, tile_id: TileId) -> Option<&Tile<&'static str>> {
-            self.tiles.get_tile(tile_id)
-        }
-
-        pub fn get_tile_count(&self) -> usize {
-            self.tiles.get_tile_count()
-        }
-    }
-
     #[test]
     fn test_tile_set_creation() {
         let tile_set = TileSet::<&str>::new();

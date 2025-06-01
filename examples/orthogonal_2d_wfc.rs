@@ -16,7 +16,7 @@
 //! - 三岔路口: [0,1,1,1], [1,0,1,1], [1,1,0,1], [1,1,1,0]
 
 use rlwfc::{
-    Cell, CellState, DefaultInitializer, Direction4, DirectionTrait, GridBuilder, GridError,
+    Cell, CellState, DefaultInitializer, GridBuilder, GridError,
     GridSystem, Tile, TileId, TileSet, TileSetVirtual, WfcError, WfcManager,
 };
 
@@ -122,11 +122,6 @@ impl SquareTileSet {
         }
     }
 
-    /// 添加瓷砖的辅助方法，对应C++的addTile
-    fn add_tile(&mut self, north: i32, west: i32, south: i32, east: i32) -> TileId {
-        // 按照neighbors()返回顺序：[北, 西, 南, 东]
-        self.tiles.add_tile(vec![north, west, south, east], 10)
-    }
 }
 
 impl TileSetVirtual<i32> for SquareTileSet {

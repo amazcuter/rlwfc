@@ -7,7 +7,7 @@
  *
  * @copyright Copyright (c) 2025
  */
-use rlwfc::{find_in_2d_vector, Cell, Direction4, DirectionTrait, GridSystem, Tile};
+use rlwfc::{Cell, Direction4, GridSystem, Tile};
 use std::collections::HashMap;
 
 /// 模拟C++WFCManager中的CellwfcData结构
@@ -193,7 +193,7 @@ fn test_propagation_logic_compatibility() {
         assert!(grid.contains_cell(neighbor));
 
         // 模拟邻居数据访问
-        let neighbor_neighbors = grid.get_neighbors(neighbor);
+        let _neighbor_neighbors = grid.get_neighbors(neighbor);
         // 每个邻居都可以安全访问，不需要空指针检查
     }
 }

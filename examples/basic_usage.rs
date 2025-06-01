@@ -123,20 +123,6 @@ fn main() -> Result<(), GridError> {
     Ok(())
 }
 
-fn find_cell_position(
-    grid: &[Vec<petgraph::graph::NodeIndex>],
-    target: petgraph::graph::NodeIndex,
-) -> (usize, usize) {
-    for (y, row) in grid.iter().enumerate() {
-        for (x, &cell) in row.iter().enumerate() {
-            if cell == target {
-                return (x, y);
-            }
-        }
-    }
-    (999, 999) // 未找到
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

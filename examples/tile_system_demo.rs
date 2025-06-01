@@ -97,10 +97,6 @@ impl NumericTileSet {
             tiles: TileSet::new(),
         }
     }
-
-    fn get_all_tiles(&self) -> &[Tile<i32>] {
-        self.tiles.get_all_tiles()
-    }
 }
 
 impl TileSetVirtual<i32> for NumericTileSet {
@@ -202,7 +198,7 @@ fn demonstrate_basic_tileset() -> Result<(), Box<dyn std::error::Error>> {
     // 添加一些基础瓷砖
     let tile1 = tile_set.add_tile(vec!["A", "B", "C", "D"], 10);
     let tile2 = tile_set.add_tile(vec!["B", "A", "D", "C"], 15);
-    let tile3 = tile_set.add_tile(vec!["C", "D", "A", "B"], 5);
+    let _tile3 = tile_set.add_tile(vec!["C", "D", "A", "B"], 5);
 
     println!("   添加了 {} 个瓷砖", tile_set.get_tile_count());
 
