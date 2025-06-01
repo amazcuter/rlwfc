@@ -9,7 +9,7 @@ repository = "https://github.com/amazcuter/rlwfc"
 documentation = "https://docs.rs/rlwfc"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-keywords = ["wfc", "wave-function-collapse", "procedural-generation", "algorithm", "grid"]
+keywords = ["wfc", "pcg", "algorithm", "grid"]
 categories = ["algorithms", "game-development", "graphics", "mathematics"]
 rust-version = "1.70"
 
