@@ -29,7 +29,17 @@
 //! ## 使用示例
 //! 
 //! ```rust,no_run
-//! use rlwfc::{WfcManager, GridSystem, TileSet, WfcInitializer, TileSetVirtual};
+//! use rlwfc::{WfcManager, GridSystem, TileSetVirtual, WfcInitializer, WfcError, Tile, TileId, GridError};
+//! 
+//! // 创建简单的瓷砖集
+//! struct MyTileSet;
+//! impl TileSetVirtual<i32> for MyTileSet {
+//!     fn build_tile_set(&mut self) -> Result<(), GridError> { Ok(()) }
+//!     fn judge_possibility(&self, _: &[Vec<TileId>], _: TileId) -> bool { true }
+//!     fn get_tile(&self, _: TileId) -> Option<&Tile<i32>> { None }
+//!     fn get_tile_count(&self) -> usize { 0 }
+//!     fn get_all_tile_ids(&self) -> Vec<TileId> { vec![] }
+//! }
 //! 
 //! // 实现初始化器
 //! struct MyInitializer;
@@ -44,7 +54,7 @@
 //! 
 //! // 使用WFC系统
 //! let grid = GridSystem::new();
-//! let tile_set = Box::new(my_tile_set);
+//! let tile_set = Box::new(MyTileSet);
 //! let mut manager = WfcManager::new(grid, tile_set).unwrap();
 //! 
 //! let mut initializer = MyInitializer;
@@ -217,7 +227,7 @@ where
 {
     fn initialize(&mut self, manager: &mut WfcManager<EdgeData>) -> Result<(), WfcError> {
         // 1. 构建瓷砖集
-        manager.tile_set.build_tile_set();
+        manager.tile_set.build_tile_set()?;
         
         // 2. 初始化所有单元格
         for cell_id in manager.grid.get_all_cells() {
@@ -895,8 +905,9 @@ mod tests {
     }
 
     impl TileSetVirtual<&'static str> for TestTileSet {
-        fn build_tile_set(&mut self) {
+        fn build_tile_set(&mut self) -> Result<(), GridError> {
             // 已在new中构建
+            Ok(())
         }
 
         fn judge_possibility(

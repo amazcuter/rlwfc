@@ -108,45 +108,62 @@
 //! #### 在 judge_possibility() 中的应用
 //! 
 //! ```rust
+//! use rlwfc::TileId;
+//! 
 //! fn judge_possibility(
-//!     &self,
 //!     neighbor_possibilities: &[Vec<TileId>],
 //!     candidate: TileId
 //! ) -> bool {
-//!     let candidate_tile = self.get_tile(candidate).unwrap();
-//!     
-//!     for (direction_index, neighbor_tiles) in neighbor_possibilities.iter().enumerate() {
-//!         // 🎯 直接通过索引获取对应方向的边数据
-//!         let candidate_edge = &candidate_tile.edges[direction_index];
-//!         
-//!         // 检查与邻居的兼容性...
-//!     }
-//!     true
+//!     // 示例实现
+//!     !neighbor_possibilities.is_empty() && candidate < 100
 //! }
 //! ```
 //! 
 //! ### 实现虚函数trait
 //! 
 //! ```rust
-//! use rlwfc::{TileSetVirtual, TileSet, TileId};
+//! use rlwfc::{TileSetVirtual, TileSet, TileId, Tile, GridError};
 //! 
 //! struct MyTileSet {
 //!     tiles: TileSet<String>,
 //! }
 //! 
 //! impl TileSetVirtual<String> for MyTileSet {
-//!     fn build_tile_set(&mut self) {
-//!         // 实现瓷砖集构建逻辑
-//!         self.tiles.add_tile(vec!["A".to_string()], 1);
+//!     fn build_tile_set(&mut self) -> Result<(), GridError> {
+//!         // 清空现有瓷砖
+//!         self.tiles.clear();
+//!         
+//!         // 添加具体的瓷砖
+//!         self.tiles.add_tile(vec!["A".to_string(), "B".to_string(), "C".to_string(), "D".to_string()], 10);
+//!         self.tiles.add_tile(vec!["B".to_string(), "A".to_string(), "D".to_string(), "C".to_string()], 15);
+//!         Ok(())
 //!     }
 //!     
 //!     fn judge_possibility(
-//!         &self, 
-//!         neighbor_possibilities: &[Vec<TileId>], 
+//!         &self,
+//!         neighbor_possibilities: &[Vec<TileId>],
 //!         candidate: TileId
 //!     ) -> bool {
-//!         // 实现约束判断逻辑
-//!         true
+//!         // 实现具体的约束判断逻辑
+//!         if let Some(_tile) = self.tiles.get_tile(candidate) {
+//!             // 检查候选瓷砖是否与邻居兼容
+//!             // 这里应该实现具体的兼容性检查逻辑
+//!             !neighbor_possibilities.is_empty()
+//!         } else {
+//!             false
+//!         }
+//!     }
+//!     
+//!     fn get_tile(&self, tile_id: TileId) -> Option<&Tile<String>> {
+//!         self.tiles.get_tile(tile_id)
+//!     }
+//!     
+//!     fn get_tile_count(&self) -> usize {
+//!         self.tiles.get_tile_count()
+//!     }
+//!     
+//!     fn get_all_tile_ids(&self) -> Vec<TileId> {
+//!         self.tiles.get_all_tile_ids()
 //!     }
 //! }
 //! ```
@@ -236,20 +253,21 @@ use crate::wfc_util::*;
 /// ## 实现示例
 /// 
 /// ```rust,no_run
-/// use rlwfc::{TileSetVirtual, TileSet, TileId};
+/// use rlwfc::{TileSetVirtual, TileSet, TileId, Tile, GridError};
 /// 
 /// struct SimpleTileSet {
 ///     tiles: TileSet<&'static str>,
 /// }
 /// 
 /// impl TileSetVirtual<&'static str> for SimpleTileSet {
-///     fn build_tile_set(&mut self) {
+///     fn build_tile_set(&mut self) -> Result<(), GridError> {
 ///         // 清空现有瓷砖
 ///         self.tiles.clear();
 ///         
 ///         // 添加具体的瓷砖
 ///         self.tiles.add_tile(vec!["A", "B", "C", "D"], 10);
 ///         self.tiles.add_tile(vec!["B", "A", "D", "C"], 15);
+///         Ok(())
 ///     }
 /// 
 ///     fn judge_possibility(
@@ -265,6 +283,18 @@ use crate::wfc_util::*;
 ///         } else {
 ///             false
 ///         }
+///     }
+///     
+///     fn get_tile(&self, tile_id: TileId) -> Option<&Tile<&'static str>> {
+///         self.tiles.get_tile(tile_id)
+///     }
+///     
+///     fn get_tile_count(&self) -> usize {
+///         self.tiles.get_tile_count()
+///     }
+///     
+///     fn get_all_tile_ids(&self) -> Vec<TileId> {
+///         self.tiles.get_all_tile_ids()
 ///     }
 /// }
 /// ```
@@ -302,7 +332,7 @@ where
     /// # use rlwfc::TileSet;
     /// # struct MySelf { tiles: TileSet<&'static str> }
     /// # impl MySelf {
-    /// fn build_tile_set(&mut self) {
+    /// fn build_tile_set(&mut self) -> Result<(), rlwfc::GridError> {
     ///     // 1. 清理现有瓷砖
     ///     self.tiles.clear();
     ///     
@@ -315,10 +345,11 @@ where
     ///     
     ///     // 4. 可选：添加验证逻辑
     ///     debug_assert!(!self.tiles.is_empty());
+    ///     Ok(())
     /// }
     /// # }
     /// ```
-    fn build_tile_set(&mut self);
+    fn build_tile_set(&mut self) -> Result<(), GridError>;
 
     /// 判断瓷砖可能性 - 对应C++的judgePossibility()虚函数
     /// 
@@ -344,7 +375,7 @@ where
     /// ```rust,no_run
     /// # use rlwfc::TileId;
     /// # struct MySelf;
-    /// # impl MySelf { fn get_tile(&self, id: TileId) -> Option<&crate::Tile<&str>> { None } }
+    /// # impl MySelf { fn get_tile(&self, id: TileId) -> Option<&rlwfc::Tile<&str>> { None } }
     /// # impl MySelf {
     /// fn judge_possibility(
     ///     &self,
@@ -352,46 +383,38 @@ where
     ///     candidate: TileId
     /// ) -> bool {
     ///     let Some(candidate_tile) = self.get_tile(candidate) else {
-    ///         return false;  // 候选瓷砖不存在
+    ///         return false;
     ///     };
     ///     
-    ///     // 遍历每个方向的邻居约束
     ///     for (direction_index, neighbor_tiles) in neighbor_possibilities.iter().enumerate() {
-    ///         if neighbor_tiles.is_empty() {
-    ///             continue;  // 该方向无约束，跳过
-    ///         }
-    ///         
-    ///         // 🎯 直接通过索引获取候选瓷砖在该方向的边数据
+    ///         // 🎯 直接获取候选瓷砖在该方向的边数据
     ///         let candidate_edge = &candidate_tile.edges[direction_index];
     ///         
-    ///         // 检查是否与该方向的任一邻居瓷砖兼容
+    ///         // 检查与该方向所有可能邻居的兼容性
     ///         let is_compatible = neighbor_tiles.iter().any(|&neighbor_id| {
     ///             if let Some(neighbor_tile) = self.get_tile(neighbor_id) {
-    ///                 // 计算邻居瓷砖相对方向的索引
+    ///                 // 获取邻居瓷砖相对方向的边数据
     ///                 let opposite_index = match direction_index {
     ///                     0 => 2,  // 北 ↔ 南
     ///                     1 => 3,  // 西 ↔ 东
     ///                     2 => 0,  // 南 ↔ 北  
     ///                     3 => 1,  // 东 ↔ 西
-    ///                     _ => return false,  // 无效索引
+    ///                     _ => return false,
     ///                 };
-    ///                 
-    ///                 // 🎯 直接获取邻居瓷砖相对方向的边数据
     ///                 let neighbor_edge = &neighbor_tile.edges[opposite_index];
     ///                 
-    ///                 // 执行边兼容性检查（具体规则由应用定义）
-    ///                 candidate_edge == neighbor_edge  // 或其他兼容性逻辑
+    ///                 // 边兼容性检查（具体规则由应用定义）
+    ///                 candidate_edge == neighbor_edge
     ///             } else {
-    ///                 false  // 邻居瓷砖不存在
+    ///                 false
     ///             }
     ///         });
     ///         
     ///         if !is_compatible {
-    ///             return false;  // 该方向不兼容，候选瓷砖不可用
+    ///             return false;
     ///         }
     ///     }
-    ///     
-    ///     true  // 所有方向都兼容，候选瓷砖可用
+    ///     true
     /// }
     /// # }
     /// ```
@@ -542,14 +565,16 @@ where
     /// ```rust,no_run
     /// # use rlwfc::{TileSetVirtual, TileId};
     /// # struct MySelf;
-    /// # impl MySelf { fn get_tile(&self, id: TileId) -> Option<&crate::Tile<&str>> { None } }
+    /// # impl MySelf { fn get_tile(&self, id: TileId) -> Option<&rlwfc::Tile<&str>> { None } }
     /// # impl MySelf {
     /// fn judge_possibility(
     ///     &self,
     ///     neighbor_possibilities: &[Vec<TileId>],
     ///     candidate: TileId
     /// ) -> bool {
-    ///     let candidate_tile = self.get_tile(candidate)?;
+    ///     let Some(candidate_tile) = self.get_tile(candidate) else {
+    ///         return false;
+    ///     };
     ///     
     ///     for (direction_index, neighbor_tiles) in neighbor_possibilities.iter().enumerate() {
     ///         // 🎯 直接获取候选瓷砖在该方向的边数据
@@ -672,12 +697,13 @@ mod tests {
     }
 
     impl TileSetVirtual<&'static str> for TestTileSet {
-        fn build_tile_set(&mut self) {
+        fn build_tile_set(&mut self) -> Result<(), GridError> {
             // 构建简单的测试瓷砖集
             self.tiles.clear();
             self.tiles.add_tile(vec!["A", "A", "A", "A"], 10);
             self.tiles.add_tile(vec!["B", "B", "B", "B"], 10);
             self.tiles.add_tile(vec!["A", "B", "A", "B"], 5);
+            Ok(())
         }
         
         fn judge_possibility(
@@ -756,7 +782,7 @@ mod tests {
         let mut test_tile_set = TestTileSet::new();
         
         // 测试构建瓷砖集
-        test_tile_set.build_tile_set();
+        test_tile_set.build_tile_set().unwrap();
         assert_eq!(test_tile_set.get_tile_count(), 3);
         
         // 测试判断可能性

@@ -79,24 +79,26 @@
 //! ## 基本使用示例
 //! 
 //! ```rust,no_run
-//! use rlwfc::{GridSystem, GridBuilder, TileSet, WfcUtil, Direction4};
+//! use rlwfc::{GridSystem, Cell, TileSet, Direction4, GridError};
 //! 
-//! // 1. 创建网格系统
-//! let mut grid = GridSystem::new();
-//! let mut builder = My2DGrid::new(3, 3);
-//! builder.build_grid_system(&mut grid)?;
-//! 
-//! // 2. 设置瓦片和约束
-//! let mut tile_set = TileSet::new();
-//! // 添加瓦片和兼容性规则...
-//! 
-//! // 3. 初始化WFC
-//! let mut wfc = WfcUtil::new();
-//! wfc.initialize(&grid, &tile_set)?;
-//! 
-//! // 4. 运行算法
-//! let result = wfc.solve()?;
-//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     // 1. 创建网格系统
+//!     let mut grid = GridSystem::new();
+//!     
+//!     // 2. 添加单元格
+//!     let cell1 = grid.add_cell(Cell::with_id(1));
+//!     let cell2 = grid.add_cell(Cell::with_id(2));
+//!     
+//!     // 3. 创建连接
+//!     grid.create_edge(cell1, Some(cell2))?;
+//!     
+//!     // 4. 方向查询
+//!     if let Some(neighbor) = grid.get_neighbor_by_direction(cell1, Direction4::East) {
+//!         println!("Found eastern neighbor: {:?}", neighbor);
+//!     }
+//!     
+//!     Ok(())
+//! }
 //! ```
 //! 
 //! ## 模块结构
@@ -168,60 +170,72 @@
 //! ### 基本图操作
 //! 
 //! ```rust
-//! use rlwfc::{GridSystem, Cell, Direction4};
+//! use rlwfc::{GridSystem, Cell, Direction4, GridError};
 //! 
-//! // 创建网格系统
-//! let mut grid = GridSystem::new();
-//! 
-//! // 添加单元格
-//! let cell1 = grid.add_cell(Cell::with_id(1));
-//! let cell2 = grid.add_cell(Cell::with_id(2));
-//! 
-//! // 创建边连接
-//! grid.create_edge(cell1, cell2).unwrap();
-//! 
-//! // 获取邻居
-//! let neighbors = grid.get_neighbors(cell1);
-//! println!("Cell {:?} has {} neighbors", cell1, neighbors.len());
-//! 
-//! // 方向感知查询
-//! if let Some(eastern_neighbor) = grid.get_neighbor_by_direction(cell1, Direction4::East) {
-//!     println!("Eastern neighbor: {:?}", eastern_neighbor);
+//! fn main() -> Result<(), GridError> {
+//!     // 创建网格系统
+//!     let mut grid = GridSystem::new();
+//!     
+//!     // 添加单元格
+//!     let cell1 = grid.add_cell(Cell::with_id(1));
+//!     let cell2 = grid.add_cell(Cell::with_id(2));
+//!     
+//!     // 创建边连接
+//!     grid.create_edge(cell1, Some(cell2))?;
+//!     
+//!     // 获取邻居
+//!     let neighbors = grid.get_neighbors(cell1);
+//!     println!("Cell {:?} has {} neighbors", cell1, neighbors.len());
+//!     
+//!     // 方向感知查询
+//!     if let Some(eastern_neighbor) = grid.get_neighbor_by_direction(cell1, Direction4::East) {
+//!         println!("Eastern neighbor: {:?}", eastern_neighbor);
+//!     }
+//!     
+//!     Ok(())
 //! }
 //! ```
 //! 
 //! ### 使用构建器创建复杂网格
 //! 
-//! ```rust
+//! ```rust,no_run
 //! use rlwfc::{GridSystem, GridBuilder, Cell, GridError};
 //! 
-//! // 定义自定义网格构建器
-//! struct RingGridBuilder {
+//! struct LinearGridBuilder {
 //!     size: usize,
 //! }
 //! 
-//! impl GridBuilder for RingGridBuilder {
+//! impl GridBuilder for LinearGridBuilder {
 //!     fn build_grid_system(&mut self, grid: &mut GridSystem) -> Result<(), GridError> {
-//!         // 创建环形连接的单元格
 //!         let mut cells = Vec::new();
 //!         for i in 0..self.size {
 //!             let cell = grid.add_cell(Cell::with_id(i as u32));
 //!             cells.push(cell);
 //!         }
 //!         
-//!         // 创建环形连接
-//!         for i in 0..self.size {
-//!             let next = (i + 1) % self.size;
-//!             grid.create_edge(cells[i], cells[next])?;
+//!         for i in 0..self.size - 1 {
+//!             grid.create_edge(cells[i], Some(cells[i + 1]))?;
 //!         }
 //!         
 //!         Ok(())
 //!     }
+//!     
+//!     fn get_dimensions(&self) -> Vec<usize> {
+//!         vec![self.size]
+//!     }
+//!     
+//!     fn get_grid_type_name(&self) -> &'static str {
+//!         "Linear"
+//!     }
 //! }
 //! 
-//! // 使用构建器
-//! let builder = RingGridBuilder { size: 6 };
-//! let grid = GridSystem::from_builder(builder).unwrap();
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     // 使用示例
+//!     let builder = LinearGridBuilder { size: 5 };
+//!     let _grid = GridSystem::from_builder(builder)?;
+//!     
+//!     Ok(())
+//! }
 //! ```
 //! 
 //! ### 瓷砖系统使用
@@ -229,13 +243,15 @@
 //! ```rust
 //! use rlwfc::{TileSet, TileSetVirtual, TileId};
 //! 
-//! // 创建瓷砖集
-//! let mut tiles = TileSet::new();
-//! let tile_id = tiles.add_tile(vec!["grass", "water", "grass", "water"], 10);
-//! 
-//! // 获取瓷砖信息
-//! if let Some(tile) = tiles.get_tile(tile_id) {
-//!     println!("Tile has {} edges", tile.edge_count());
+//! fn main() {
+//!     // 创建瓷砖集
+//!     let mut tiles = TileSet::new();
+//!     let tile_id = tiles.add_tile(vec!["grass", "water", "grass", "water"], 10);
+//!     
+//!     // 获取瓷砖信息
+//!     if let Some(tile) = tiles.get_tile(tile_id) {
+//!         println!("Tile has {} edges", tile.edge_count());
+//!     }
 //! }
 //! ```
 //! 
@@ -283,20 +299,33 @@
 //! ### 自定义瓷砖约束
 //! 
 //! ```rust
-//! use rlwfc::{TileSetVirtual, TileId};
+//! use rlwfc::{TileSetVirtual, TileId, Tile, GridError};
 //! 
 //! struct CustomTileSet {
 //!     // 自定义字段...
 //! }
 //! 
 //! impl TileSetVirtual<String> for CustomTileSet {
-//!     fn build_tile_set(&mut self) {
+//!     fn build_tile_set(&mut self) -> Result<(), GridError> {
 //!         // 自定义瓷砖构建逻辑
+//!         Ok(())
 //!     }
 //!     
-//!     fn judge_possibility(&self, neighbors: &[Vec<TileId>], candidate: TileId) -> bool {
+//!     fn judge_possibility(&self, _neighbors: &[Vec<TileId>], _candidate: TileId) -> bool {
 //!         // 自定义约束判断逻辑
 //!         true
+//!     }
+//!     
+//!     fn get_tile(&self, _id: TileId) -> Option<&Tile<String>> {
+//!         None
+//!     }
+//!     
+//!     fn get_tile_count(&self) -> usize {
+//!         0
+//!     }
+//!     
+//!     fn get_all_tile_ids(&self) -> Vec<TileId> {
+//!         vec![]
 //!     }
 //! }
 //! ```

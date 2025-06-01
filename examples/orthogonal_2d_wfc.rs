@@ -17,7 +17,7 @@
 
 use rlwfc::{
     GridSystem, GridBuilder, TileSet, TileSetVirtual, WfcManager, DefaultInitializer,
-    Cell, Tile, GridError, WfcError, TileId, CellState
+    Cell, Tile, GridError, WfcError, TileId, CellState, Direction4, DirectionTrait
 };
 
 // =============================================================================
@@ -127,33 +127,36 @@ impl SquareTileSet {
 }
 
 impl TileSetVirtual<i32> for SquareTileSet {
-    fn build_tile_set(&mut self) {
-        println!("构建方形瓷砖集...");
+    fn build_tile_set(&mut self) -> Result<(), GridError> {
         self.tiles.clear();
         
-        // ALL0 全0瓷砖 [北, 西, 南, 东] = [0, 0, 0, 0]
-        self.add_tile(0, 0, 0, 0);
-        println!("  添加 ALL0 瓷砖: [0,0,0,0]");
+        // 添加基础瓷砖，用数字表示连接类型
+        // 0 = 空白，1 = 路径
         
-        // ALL1 全1瓷砖 [北, 西, 南, 东] = [1, 1, 1, 1]
-        self.add_tile(1, 1, 1, 1);
-        println!("  添加 ALL1 瓷砖: [1,1,1,1]");
+        // 全空白瓷砖
+        self.tiles.add_tile(vec![0, 0, 0, 0], 30);  // [北, 西, 南, 东]
         
-        // 垂直通道：北南连通，东西断开 [北, 西, 南, 东] = [1, 0, 1, 0]
-        self.add_tile(1, 0, 1, 0);
+        // 直线路径瓷砖
+        self.tiles.add_tile(vec![1, 0, 1, 0], 20);  // 垂直路径
+        self.tiles.add_tile(vec![0, 1, 0, 1], 20);  // 水平路径
         
-        // 水平通道：东西连通，北南断开 [北, 西, 南, 东] = [0, 1, 0, 1]
-        self.add_tile(0, 1, 0, 1);
-        println!("  添加通道瓷砖: 垂直[1,0,1,0], 水平[0,1,0,1]");
+        // // 转角路径瓷砖
+        // self.tiles.add_tile(vec![1, 1, 0, 0], 15);  // 左上角
+        // self.tiles.add_tile(vec![1, 0, 0, 1], 15);  // 右上角
+        // self.tiles.add_tile(vec![0, 1, 1, 0], 15);  // 左下角
+        // self.tiles.add_tile(vec![0, 0, 1, 1], 15);  // 右下角
         
-        // 三岔路口瓷砖 (三个方向连通)
-        self.add_tile(0, 1, 1, 1); // 西南东三通 [0,1,1,1]
-        self.add_tile(1, 0, 1, 1); // 北南东三通 [1,0,1,1]
-        self.add_tile(1, 1, 0, 1); // 北西东三通 [1,1,0,1]
-        self.add_tile(1, 1, 1, 0); // 北西南三通 [1,1,1,0]
-        println!("  添加三岔路口瓷砖: 4种类型");
+        // T型路径瓷砖
+        self.tiles.add_tile(vec![1, 1, 1, 0], 10);  // 向右开口的T
+        self.tiles.add_tile(vec![1, 0, 1, 1], 10);  // 向左开口的T
+        self.tiles.add_tile(vec![0, 1, 1, 1], 10);  // 向上开口的T
+        self.tiles.add_tile(vec![1, 1, 0, 1], 10);  // 向下开口的T
         
-        println!("瓷砖集构建完成，总共 {} 个瓷砖", self.tiles.get_tile_count());
+        // 十字路口瓷砖
+        self.tiles.add_tile(vec![1, 1, 1, 1], 5);   // 全连通
+        
+        println!("瓷砖集构建完成：{} 种瓷砖", self.tiles.get_tile_count());
+        Ok(())
     }
     
     fn judge_possibility(
@@ -445,7 +448,7 @@ mod tests {
     #[test]
     fn test_square_tile_set() {
         let mut tile_set = SquareTileSet::new();
-        tile_set.build_tile_set();
+        tile_set.build_tile_set().unwrap();
         
         assert_eq!(tile_set.get_tile_count(), 8); // 2 + 2 + 4 = 8个瓷砖
         
@@ -461,7 +464,7 @@ mod tests {
     #[test]
     fn test_tile_compatibility() {
         let mut tile_set = SquareTileSet::new();
-        tile_set.build_tile_set();
+        tile_set.build_tile_set().unwrap();
         
         // 测试ALL0瓷砖与自身的兼容性
         let neighbor_constraints = vec![

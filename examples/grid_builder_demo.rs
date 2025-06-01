@@ -45,9 +45,9 @@ impl GridBuilder for LinearGridBuilder {
             cells.push(cell_id);
         }
 
-        // 创建线性连接：0 -> 1 -> 2 -> ... -> n-1
+        // 创建链式连接
         for i in 0..self.length - 1 {
-            grid.create_edge(cells[i], cells[i + 1])?;
+            grid.create_edge(cells[i], Some(cells[i + 1]))?;
         }
 
         Ok(())
@@ -107,12 +107,12 @@ impl GridBuilder for Orthogonal2DBuilder {
                 
                 // 连接到右边（东向）
                 if x + 1 < self.width {
-                    grid.create_edge(current, cells[y][x + 1])?;
+                    grid.create_edge(current, Some(cells[y][x + 1]))?;
                 }
                 
                 // 连接到下面（南向）
                 if y + 1 < self.height {
-                    grid.create_edge(current, cells[y + 1][x])?;
+                    grid.create_edge(current, Some(cells[y + 1][x]))?;
                 }
             }
         }
@@ -163,10 +163,10 @@ impl GridBuilder for RingGridBuilder {
             cells.push(cell_id);
         }
 
-        // 创建环形连接：0 -> 1 -> 2 -> ... -> n-1 -> 0
+        // 创建环形连接
         for i in 0..self.size {
             let next = (i + 1) % self.size;
-            grid.create_edge(cells[i], cells[next])?;
+            grid.create_edge(cells[i], Some(cells[next]))?;
         }
 
         Ok(())

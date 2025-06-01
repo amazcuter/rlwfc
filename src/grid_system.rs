@@ -56,7 +56,7 @@
 //! let cell2 = grid.add_cell(Cell::with_id(2));
 //! 
 //! // 创建连接
-//! grid.create_edge(cell1, cell2).unwrap();
+//! grid.create_edge(cell1, Some(cell2)).unwrap();
 //! 
 //! // 获取邻居
 //! let neighbors = grid.get_neighbors(cell1);
@@ -89,7 +89,7 @@
 //!         
 //!         // 创建线性连接
 //!         for i in 0..self.length - 1 {
-//!             grid.create_edge(cells[i], cells[i + 1])?;
+//!             grid.create_edge(cells[i], Some(cells[i + 1]))?;
 //!         }
 //!         
 //!         Ok(())
@@ -127,8 +127,7 @@
  */
 
 use crate::wfc_util::*;
-use petgraph::Graph;
-use petgraph::graph::{NodeIndex, EdgeIndex};
+use petgraph::{Graph, Directed};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -216,22 +215,22 @@ use std::collections::HashSet;
 ///                 
 ///                 // 1. 东向边
 ///                 if x + 1 < self.width {
-///                     grid.create_edge(current, cells[y][x + 1])?;
+///                     grid.create_edge(current, Some(cells[y][x + 1]))?;
 ///                 }
 ///                 
 ///                 // 2. 南向边
 ///                 if y + 1 < self.height {
-///                     grid.create_edge(current, cells[y + 1][x])?;
+///                     grid.create_edge(current, Some(cells[y + 1][x]))?;
 ///                 }
 ///                 
 ///                 // 3. 西向边
 ///                 if x > 0 {
-///                     grid.create_edge(current, cells[y][x - 1])?;
+///                     grid.create_edge(current, Some(cells[y][x - 1]))?;
 ///                 }
 ///                 
 ///                 // 4. 北向边
 ///                 if y > 0 {
-///                     grid.create_edge(current, cells[y - 1][x])?;
+///                     grid.create_edge(current, Some(cells[y - 1][x]))?;
 ///                 }
 ///             }
 ///         }
@@ -469,38 +468,34 @@ impl GridSystem {
     /// ## 正确使用模式
     /// 
     /// ```rust,no_run
-    /// # use rlwfc::{GridSystem, GridBuilder, GridError};
+    /// # use rlwfc::{GridSystem, GridBuilder, GridError, Cell};
     /// # struct MyBuilder;
     /// # impl GridBuilder for MyBuilder {
     /// #   fn build_grid_system(&mut self, grid: &mut GridSystem) -> Result<(), GridError> {
     /// // ✅ 正确：在GridBuilder中按全局一致顺序创建边
-    /// for cell in all_cells {
+    /// let all_cells = vec![grid.add_cell(Cell::new())]; // 示例：创建单元格列表
+    /// for cell in &all_cells {
     ///     // 按固定顺序为每个单元格创建边：东、南、西、北
-    ///     if let Some(east) = get_east_neighbor(cell) {
-    ///         grid.create_edge(cell, Some(east))?;  // 1. 东向边
+    ///     // 这里需要实际的邻居查找逻辑
+    ///     if let Some(east) = all_cells.get(0) { // 示例：获取东邻居
+    ///         grid.create_edge(*cell, Some(*east))?;  // 1. 东向边
     ///     }
-    ///     if let Some(south) = get_south_neighbor(cell) {
-    ///         grid.create_edge(cell, Some(south))?; // 2. 南向边
-    ///     }
-    ///     if let Some(west) = get_west_neighbor(cell) {
-    ///         grid.create_edge(cell, Some(west))?;  // 3. 西向边
-    ///     }
-    ///     if let Some(north) = get_north_neighbor(cell) {
-    ///         grid.create_edge(cell, Some(north))?; // 4. 北向边
-    ///     }
+    ///     // 类似地创建其他方向的边...
     /// }
     /// #     Ok(())
     /// #   }
+    /// #   fn get_dimensions(&self) -> Vec<usize> { vec![] }
+    /// #   fn get_grid_type_name(&self) -> &'static str { "Test" }
     /// # }
     /// ```
     /// 
     /// ## ❌ 错误使用模式
     /// 
     /// ```rust,no_run
-    /// # use rlwfc::{GridSystem, CellId, GridError};
+    /// # use rlwfc::{GridSystem, CellId, GridError, Cell};
     /// # let mut grid = GridSystem::new();
-    /// # let cell_a = grid.add_cell(Default::default());
-    /// # let cell_b = grid.add_cell(Default::default());
+    /// # let cell_a = grid.add_cell(Cell::new());
+    /// # let cell_b = grid.add_cell(Cell::new());
     /// // ❌ 错误：随意创建边会破坏方向识别
     /// grid.create_edge(cell_a, Some(cell_b))?;
     /// grid.create_edge(cell_b, Some(cell_a))?; // 顺序可能不正确
@@ -916,13 +911,17 @@ mod tests {
         // 使用builder构建网格
         grid.build_with(builder).unwrap();
         
-        // 验证构建结果
-        assert_eq!(grid.get_cells_count(), 6); // 3x2 = 6个单元格
+        // 验证构建结果：6个真实单元格 + 5个虚拟节点 = 11个节点
+        assert_eq!(grid.get_cells_count(), 11); 
         
-        // 验证命名单元格
+        // 验证命名单元格（只有真实单元格有名称）
         assert!(grid.get_cell_by_name("cell_0_0").is_some());
         assert!(grid.get_cell_by_name("cell_2_1").is_some());
         assert!(grid.get_cell_by_name("cell_3_0").is_none()); // 超出范围
+        
+        // 在3x2网格中，实际创建了12条边（6个单元格 * 2条边/单元格）
+        let expected_edges = 12;
+        assert_eq!(grid.get_edges_count(), expected_edges);
     }
 
     #[test]
@@ -931,11 +930,16 @@ mod tests {
         let builder = SimpleGridBuilder::new(2, 2);
         let grid = GridSystem::from_builder(builder).unwrap();
         
-        assert_eq!(grid.get_cells_count(), 4); // 2x2 = 4个单元格
+        // 验证构建结果：4个真实单元格 + 4个虚拟节点 = 8个节点
+        assert_eq!(grid.get_cells_count(), 8);
         
         // 测试连接性：每个内部单元格应该有邻居
         let cell_0_0 = grid.get_cell_by_name("cell_0_0").unwrap();
         let neighbors = grid.get_neighbors(cell_0_0);
         assert_eq!(neighbors.len(), 2); // 连接到右边和下面
+        
+        // 2x2网格创建了8条边（4个单元格 * 2条边/单元格）
+        let expected_edges = 8;
+        assert_eq!(grid.get_edges_count(), expected_edges);
     }
 } 

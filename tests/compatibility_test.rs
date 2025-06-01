@@ -42,8 +42,8 @@ fn test_grid_system_api_compatibility() {
     assert_eq!(all_cells.len(), 4);
     
     // 2. 测试C++中 grid_->getNeighbor(cell) 的使用模式
-    grid.create_edge(cells[0], cells[1]).unwrap();
-    grid.create_edge(cells[0], cells[2]).unwrap();
+    grid.create_edge(cells[0], Some(cells[1])).unwrap();
+    grid.create_edge(cells[0], Some(cells[2])).unwrap();
     
     // C++模式：for (CellID neighbor : grid_->getNeighbor(currentCell))
     let neighbors = grid.get_neighbors(cells[0]);
@@ -100,8 +100,8 @@ fn test_direction_system_enhancement() {
     let east = cells[0][1];
     let south = cells[1][0];
     
-    grid.create_edge(center, east).unwrap();   // 东向边
-    grid.create_edge(center, south).unwrap();  // 南向边
+    grid.create_edge(center, Some(east)).unwrap();   // 东向边
+    grid.create_edge(center, Some(south)).unwrap();  // 南向边
     
     // 新增的方向查询功能（超越C++版本）
     assert_eq!(grid.get_neighbor_by_direction(center, Direction4::East), Some(east));
@@ -176,8 +176,8 @@ fn test_propagation_logic_compatibility() {
     let east = grid.add_cell(Cell::with_id(1));
     let south = grid.add_cell(Cell::with_id(2));
     
-    grid.create_edge(center, east).unwrap();
-    grid.create_edge(center, south).unwrap();
+    grid.create_edge(center, Some(east)).unwrap();
+    grid.create_edge(center, Some(south)).unwrap();
     
     // 模拟C++中的传播逻辑
     // for (CellID neighbor : grid_->getNeighbor(currentCell))
@@ -231,13 +231,13 @@ fn test_overall_compatibility() {
             // 东向连接
             if j < 2 {
                 let east = cells[current_idx + 1];
-                grid.create_edge(current, east).unwrap();
+                grid.create_edge(current, Some(east)).unwrap();
             }
             
             // 南向连接
             if i < 2 {
                 let south = cells[current_idx + 3];
-                grid.create_edge(current, south).unwrap();
+                grid.create_edge(current, Some(south)).unwrap();
             }
         }
     }

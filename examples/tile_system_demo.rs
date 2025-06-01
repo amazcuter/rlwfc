@@ -9,7 +9,7 @@
  * @copyright Copyright (c) 2025
  */
 
-use rlwfc::{TileSet, TileSetVirtual, Tile, TileId};
+use rlwfc::{TileSet, TileSetVirtual, Tile, TileId, GridError};
 
 // =============================================================================
 // 简单瓷砖集实现 - 字符串边数据
@@ -36,14 +36,22 @@ impl SimpleTileSet {
 }
 
 impl TileSetVirtual<&'static str> for SimpleTileSet {
-    fn build_tile_set(&mut self) {
-        // 清空现有瓷砖
+    fn build_tile_set(&mut self) -> Result<(), GridError> {
+        // 构建基础瓷砖
         self.tiles.clear();
         
-        // 添加一些基本瓷砖
-        self.tiles.add_tile(vec!["A", "B", "C", "D"], 10);
-        self.tiles.add_tile(vec!["B", "A", "D", "C"], 15);
-        self.tiles.add_tile(vec!["C", "D", "A", "B"], 20);
+        // 添加全草地瓷砖
+        self.tiles.add_tile(vec!["grass", "grass", "grass", "grass"], 50);
+        
+        // 添加全水面瓷砖
+        self.tiles.add_tile(vec!["water", "water", "water", "water"], 30);
+        
+        // 添加边界瓷砖
+        self.tiles.add_tile(vec!["grass", "water", "grass", "water"], 20);
+        self.tiles.add_tile(vec!["water", "grass", "water", "grass"], 20);
+        
+        println!("构建完成：添加了 {} 个瓷砖", self.tiles.get_tile_count());
+        Ok(())
     }
     
     fn judge_possibility(
@@ -97,33 +105,18 @@ impl NumericTileSet {
 }
 
 impl TileSetVirtual<i32> for NumericTileSet {
-    fn build_tile_set(&mut self) {
+    fn build_tile_set(&mut self) -> Result<(), GridError> {
+        // 构建数值瓷砖
         self.tiles.clear();
         
-        println!("   构建数字瓷砖集...");
+        // 添加基础连接模式
+        self.tiles.add_tile(vec![1, 1, 1, 1], 40);  // 全连接
+        self.tiles.add_tile(vec![0, 0, 0, 0], 30);  // 全断开
+        self.tiles.add_tile(vec![1, 0, 1, 0], 20);  // 上下连接
+        self.tiles.add_tile(vec![0, 1, 0, 1], 20);  // 左右连接
         
-        // 使用数字表示不同的边类型
-        // 0 = 平原, 1 = 山脉, 2 = 河流
-        
-        // 平原瓷砖
-        self.tiles.add_tile(vec![0, 0, 0, 0], 40);
-        println!("     添加平原瓷砖 [0,0,0,0] (权重: 40)");
-        
-        // 山脉瓷砖
-        self.tiles.add_tile(vec![1, 1, 1, 1], 25);
-        println!("     添加山脉瓷砖 [1,1,1,1] (权重: 25)");
-        
-        // 河流瓷砖（直线）
-        self.tiles.add_tile(vec![2, 0, 2, 0], 20); // 垂直河流
-        self.tiles.add_tile(vec![0, 2, 0, 2], 20); // 水平河流
-        println!("     添加河流瓷砖 (权重: 20 各)");
-        
-        // 过渡瓷砖
-        self.tiles.add_tile(vec![0, 1, 1, 0], 15); // 平原到山脉
-        self.tiles.add_tile(vec![1, 0, 0, 1], 15); // 山脉到平原
-        println!("     添加过渡瓷砖 (权重: 15 各)");
-        
-        println!("   数字瓷砖集构建完成，总共 {} 个瓷砖", self.tiles.get_tile_count());
+        println!("数值瓷砖集构建完成：{} 个瓷砖", self.tiles.get_tile_count());
+        Ok(())
     }
 
     fn judge_possibility(
@@ -238,7 +231,7 @@ fn demonstrate_simple_tileset() -> Result<(), Box<dyn std::error::Error>> {
     let mut simple_tileset = SimpleTileSet::new();
     
     // 构建瓷砖集
-    simple_tileset.build_tile_set();
+    simple_tileset.build_tile_set()?;
     
     // 展示所有瓷砖
     println!("\n   瓷砖详情:");
@@ -259,7 +252,7 @@ fn demonstrate_numeric_tileset() -> Result<(), Box<dyn std::error::Error>> {
     let mut numeric_tileset = NumericTileSet::new();
     
     // 构建瓷砖集
-    numeric_tileset.build_tile_set();
+    numeric_tileset.build_tile_set()?;
     
     // 展示瓷砖统计
     println!("\n   瓷砖统计:");
@@ -286,7 +279,7 @@ fn demonstrate_numeric_tileset() -> Result<(), Box<dyn std::error::Error>> {
 /// 演示约束判断
 fn demonstrate_constraint_checking() -> Result<(), Box<dyn std::error::Error>> {
     let mut tileset = SimpleTileSet::new();
-    tileset.build_tile_set();
+    tileset.build_tile_set()?;
     
     println!("   测试不同约束情况:");
     
