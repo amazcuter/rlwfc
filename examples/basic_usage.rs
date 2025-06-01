@@ -8,8 +8,7 @@
  *
  * @copyright Copyright (c) 2025
  */
-
-use rlwfc::{GridSystem, Cell, Direction4, DirectionTrait, GridError};
+use rlwfc::{Cell, Direction4, DirectionTrait, GridError, GridSystem};
 
 fn main() -> Result<(), GridError> {
     println!("=== rlwfc 基本使用示例 ===\n");
@@ -24,13 +23,10 @@ fn main() -> Result<(), GridError> {
     let cell2 = grid.add_cell(Cell::with_id(2));
     let cell3 = grid.add_cell(Cell::with_id(3));
     let cell4 = grid.add_cell(Cell::with_id(4));
-    
+
     println!("添加了 {} 个单元格", grid.get_cells_count());
 
-    let cells = vec![
-        vec![cell1, cell2],
-        vec![cell3, cell4],
-    ];
+    let cells = vec![vec![cell1, cell2], vec![cell3, cell4]];
 
     // 打印网格布局
     println!("   网格布局:");
@@ -41,19 +37,19 @@ fn main() -> Result<(), GridError> {
     println!("\n3. 创建边连接:");
     let width = 2;
     let height = 2;
-    
+
     // 逐个单元格按照正确顺序创建边：东、南、西、北
     for y in 0..height {
         for x in 0..width {
             let current = cells[y][x];
-            
+
             // 东向连接
             if x + 1 < width {
                 let east = cells[y][x + 1];
                 grid.create_edge(current, Some(east))?;
                 println!("   {:?} -> {:?} (东向)", current, east);
             }
-            
+
             // 南向连接
             if y + 1 < height {
                 let south = cells[y + 1][x];
@@ -72,9 +68,9 @@ fn main() -> Result<(), GridError> {
     // 5. 测试方向查询
     println!("\n5. 方向查询测试:");
     let center_cell = cells[0][0]; // 左上角单元格
-    
+
     println!("   以单元格 {:?} 为中心:", center_cell);
-    
+
     for direction in Direction4::all_directions() {
         if let Some(neighbor) = grid.get_neighbor_by_direction(center_cell, direction) {
             println!("     {}: {:?}", direction.name(), neighbor);
@@ -110,11 +106,11 @@ fn main() -> Result<(), GridError> {
     // 9. 使用命名单元格
     println!("\n9. 命名单元格演示:");
     let named_cell = grid.add_cell_with_name(
-        Cell::with_name("特殊单元格".to_string()), 
-        "special".to_string()
+        Cell::with_name("特殊单元格".to_string()),
+        "special".to_string(),
     );
     println!("   添加了命名单元格: {:?}", named_cell);
-    
+
     if let Some(found_cell) = grid.get_cell_by_name("special") {
         println!("   通过名称找到单元格: {:?}", found_cell);
     }
@@ -127,64 +123,10 @@ fn main() -> Result<(), GridError> {
     Ok(())
 }
 
-/// 演示创建更复杂的网格
-#[allow(dead_code)]
-fn create_3x3_grid() -> Result<(), Box<dyn std::error::Error>> {
-    println!("\n=== 3x3 网格示例 ===");
-    
-    let mut grid = GridSystem::with_capacity(9, 12); // 预分配容量
-    
-    // 创建3x3网格
-    let mut cells = Vec::new();
-    for y in 0..3 {
-        let mut row = Vec::new();
-        for x in 0..3 {
-            let cell = grid.add_cell_with_name(
-                Cell::with_id((y * 3 + x) as u32),
-                format!("cell_{}_{}", x, y)
-            );
-            row.push(cell);
-        }
-        cells.push(row);
-    }
-    
-    // 创建双向连接（每个方向都有对应的边）
-    for y in 0..3 {
-        for x in 0..3 {
-            let current = cells[y][x];
-            
-            // 东西连接
-            if x + 1 < 3 {
-                let east = cells[y][x + 1];
-                grid.create_edge(current, Some(east))?; // 东向
-                grid.create_edge(east, Some(current))?; // 西向
-            }
-            
-            // 南北连接
-            if y + 1 < 3 {
-                let south = cells[y + 1][x];
-                grid.create_edge(current, Some(south))?; // 南向
-                grid.create_edge(south, Some(current))?; // 北向
-            }
-        }
-    }
-    
-    println!("创建了3x3双向连接网格");
-    println!("{}", grid.get_statistics());
-    
-    // 测试中心单元格的四个方向
-    let center = cells[1][1];
-    println!("\n中心单元格 {:?} 的四个方向:", center);
-    for direction in Direction4::all_directions() {
-        if let Some(neighbor) = grid.get_neighbor_by_direction(center, direction) {
-            println!("  {}: {:?}", direction.name(), neighbor);
-        }
-    }
-    
-    Ok(())
-}
-
-fn find_cell_position(grid: &[Vec<petgraph::graph::NodeIndex>], target: petgraph::graph::NodeIndex) -> (usize, usize) {
+fn find_cell_position(
+    grid: &[Vec<petgraph::graph::NodeIndex>],
+    target: petgraph::graph::NodeIndex,
+) -> (usize, usize) {
     for (y, row) in grid.iter().enumerate() {
         for (x, &cell) in row.iter().enumerate() {
             if cell == target {
@@ -198,26 +140,26 @@ fn find_cell_position(grid: &[Vec<petgraph::graph::NodeIndex>], target: petgraph
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_grid_creation() {
         let mut grid = GridSystem::new();
         let cell1 = grid.add_cell(Cell::with_id(1));
         let cell2 = grid.add_cell(Cell::with_id(2));
-        
+
         // 测试自环检测
         match grid.create_edge(cell1, Some(cell1)) {
             Err(GridError::SelfLoop) => println!("✓ 正确检测到自环"),
             _ => panic!("应该检测到自环错误"),
         }
-        
+
         assert_eq!(grid.get_cells_count(), 2);
     }
-    
+
     #[test]
     fn test_neighbors_order() -> Result<(), GridError> {
         let mut grid = GridSystem::new();
-        
+
         // 创建2x2网格以测试邻居顺序
         let cells = vec![
             vec![
@@ -229,28 +171,28 @@ mod tests {
                 grid.add_cell(Cell::with_id(3)),
             ],
         ];
-        
+
         // 为中心位置 (0,0) 的单元格创建边
         let current = cells[0][0];
         let east = cells[0][1];
         let south = cells[1][0];
-        
+
         // 按照正确顺序创建边：东、南、西、北
         // 东向
         grid.create_edge(current, Some(east))?;
         grid.create_edge(east, Some(current))?;
-        
+
         // 南向
         grid.create_edge(current, Some(south))?;
         grid.create_edge(south, Some(current))?;
-        
+
         // 验证邻居顺序是否符合预期：[北, 西, 南, 东]
         let neighbors = grid.get_neighbors(current);
-        
+
         // 在2x2网格中，(0,0)位置只有东和南邻居
         // 由于edges顺序是[东, 南]，neighbors()应该返回[南, 东]（逆序）
         assert_eq!(neighbors.len(), 2);
-        
+
         Ok(())
     }
-} 
+}

@@ -38,6 +38,7 @@ fn propagate_to_neighbors(&mut self, cell_id: CellId) -> Result<(), WfcError> {
 ```
 
 这种设计确保：
+
 - **完整的邻居信息**：WFC算法能访问所有方向的邻居
 - **方向感知传播**：约束传播时知道具体的连接方向  
 - **零额外开销**：方向信息通过边创建顺序获得，无需额外存储
@@ -55,6 +56,7 @@ fn propagate_to_neighbors(&mut self, cell_id: CellId) -> Result<(), WfcError> {
 ### 核心组件分解
 
 #### 1. **数据结构** (30% 复杂度)
+
 ```cpp
 // C++原结构
 enum class State { Collapsed, Noncollapsed, conflict };
@@ -70,6 +72,7 @@ using WFCSystemData = std::unordered_map<CellID, CellwfcData>;
 ```
 
 #### 2. **WFC核心算法** (40% 复杂度)
+
 - `collapse()`: 最小熵单元坍塌算法
 - `propagateEffects()`: 约束传播算法
 - `calculateEntropy()`: 香农熵计算
@@ -77,12 +80,14 @@ using WFCSystemData = std::unordered_map<CellID, CellwfcData>;
 - `tileIsCompatible()`: 瓷砖兼容性检查
 
 #### 3. **冲突处理系统** (20% 复杂度)
+
 - `resolveConflicts()`: 冲突解决入口
 - `resolveConflictsCell()`: 分层回溯解决
 - `recoveryPossibility()`: 可能性恢复
 - `retrospectiveGetSolution()`: 深度回溯算法
 
 #### 4. **用户接口** (10% 复杂度)
+
 - `initialize()`: 虚函数初始化
 - `run()` / `runStep()`: 执行接口
 - `preCollapsed()`: 手动预设
@@ -93,6 +98,7 @@ using WFCSystemData = std::unordered_map<CellID, CellwfcData>;
 ### 阶段1: 基础数据结构设计
 
 #### 1.1 状态枚举重新设计
+
 ```rust
 /// WFC单元格状态，对应C++的State枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -107,6 +113,7 @@ pub enum CellState {
 ```
 
 #### 1.2 单元格WFC数据结构
+
 ```rust
 /// 单元格WFC附加数据，对应C++的CellwfcData
 #[derive(Debug, Clone)]
@@ -123,6 +130,7 @@ pub struct CellWfcData {
 ```
 
 #### 1.3 系统状态管理
+
 ```rust
 /// WFC系统完整状态，对应C++的WFCSystemData
 pub type WfcSystemData = HashMap<CellId, CellWfcData>;
@@ -139,6 +147,7 @@ pub struct SystemSnapshot {
 ### 阶段2: 核心算法实现
 
 #### 2.1 WFC管理器主结构
+
 ```rust
 /// WFC算法管理器，对应C++的WFCManager模板类
 /// 
@@ -166,6 +175,7 @@ where
 ```
 
 #### 2.2 配置参数结构
+
 ```rust
 /// WFC算法配置参数
 #[derive(Debug, Clone)]
@@ -181,6 +191,7 @@ pub struct WfcConfig {
 #### 2.3 核心算法方法设计
 
 ##### 坍塌算法
+
 ```rust
 impl<EdgeData> WfcManager<EdgeData> {
     /// 主坍塌算法，对应C++的collapse()
@@ -213,6 +224,7 @@ impl<EdgeData> WfcManager<EdgeData> {
 ```
 
 ##### 约束传播算法
+
 ```rust
 impl<EdgeData> WfcManager<EdgeData> {
     /// 约束传播算法，对应C++的propagateEffects()
@@ -297,6 +309,7 @@ impl<EdgeData> WfcManager<EdgeData> {
 ```
 
 ##### 熵计算算法
+
 ```rust
 impl<EdgeData> WfcManager<EdgeData> {
     /// 计算香农熵，对应C++的calculateEntropy()
@@ -339,6 +352,7 @@ impl<EdgeData> WfcManager<EdgeData> {
 **重要概念澄清**：本系统的冲突处理使用**分层修复方法**，这里的"回溯"是专门为解决冲突层而设计的，**不同于传统WFC算法的过程性回溯**。
 
 **分层修复的特点**：
+
 1. **冲突定位**：识别并收集所有冲突单元格
 2. **分层扩展**：从冲突核心向外扩展影响层
 3. **逐层修复**：从外层到内层恢复可能性
@@ -473,6 +487,7 @@ impl<EdgeData> WfcManager<EdgeData> {
 ### 阶段4: 用户接口设计
 
 #### 4.1 初始化接口
+
 ```rust
 /// 初始化特性，对应C++的initialize()虚函数
 pub trait WfcInitializer<EdgeData> {
@@ -511,6 +526,7 @@ where
 ```
 
 #### 4.2 执行接口
+
 ```rust
 impl<EdgeData> WfcManager<EdgeData> {
     /// 完整运行WFC算法，对应C++的run()
@@ -571,6 +587,7 @@ impl<EdgeData> WfcManager<EdgeData> {
 ```
 
 #### 4.3 执行结果类型
+
 ```rust
 /// 单步执行结果
 #[derive(Debug, Clone, PartialEq)]
@@ -589,6 +606,7 @@ pub enum StepResult {
 ### 阶段5: 错误处理系统
 
 #### 5.1 WFC特定错误类型
+
 ```rust
 /// WFC算法特定错误类型
 #[derive(Debug, Clone, PartialEq)]
@@ -641,24 +659,28 @@ impl std::error::Error for WfcError {}
 ## 📅 实施计划
 
 ### 第1周: 基础架构 (阶段1)
+
 - [ ] 创建`wfc_manager.rs`模块
 - [ ] 实现基础数据结构
 - [ ] 设计错误处理系统
 - [ ] 建立单元测试框架
 
 ### 第2周: 核心算法 (阶段2)
+
 - [ ] 实现`WfcManager`主结构
 - [ ] 迁移坍塌算法
 - [ ] 实现约束传播
 - [ ] 添加熵计算功能
 
 ### 第3周: 冲突处理 (阶段3)
+
 - [ ] 实现冲突检测
 - [ ] 迁移回溯算法
 - [ ] 添加分层解决机制
 - [ ] 性能优化
 
 ### 第4周: 用户接口 (阶段4+5)
+
 - [ ] 设计初始化系统
 - [ ] 实现执行接口
 - [ ] 完善错误处理
@@ -667,16 +689,19 @@ impl std::error::Error for WfcError {}
 ## 🧪 测试策略
 
 ### 单元测试
+
 - 每个算法组件的独立测试
 - 边界条件和错误情况测试
 - 性能基准测试
 
 ### 集成测试
+
 - 完整WFC流程测试
 - 与现有模块的集成测试
 - 不同网格类型的兼容性测试
 
 ### 性能测试
+
 - 大规模网格的性能测试
 - 内存使用优化验证
 - 与C++版本的性能对比
@@ -692,12 +717,14 @@ impl std::error::Error for WfcError {}
 ## 🔧 技术要点
 
 ### 关键优化机会
+
 1. **内存管理**: 利用Rust所有权系统避免不必要的复制
 2. **并发安全**: 设计支持并发访问的数据结构
 3. **缓存优化**: 实现熵值和兼容性检查的缓存
 4. **算法改进**: 优化回溯算法的性能
 
 ### 潜在挑战
+
 1. **复杂度管理**: C++代码的复杂逻辑需要仔细重构
 2. **性能要求**: 保证迁移后的性能不下降
 3. **API设计**: 在保持功能完整性的同时提供易用接口
@@ -719,6 +746,7 @@ impl std::error::Error for WfcError {}
 #### 核心数据结构设计
 
 ##### 瓷砖数据结构
+
 ```rust
 pub struct Tile<EdgeData> {
     pub id: TileId,
@@ -727,7 +755,7 @@ pub struct Tile<EdgeData> {
 }
 ```
 
-**⚠️ 关键约束：瓷砖边数据顺序**
+###### **⚠️ 关键约束：瓷砖边数据顺序**
 
 瓷砖的边数据必须严格按照 `neighbors()` 返回顺序排列：
 
@@ -743,6 +771,7 @@ tile_set.add_tile(tile_edges, weight);
 ```
 
 **顺序对应关系**：
+
 ```text
 网格边创建顺序：东 → 南 → 西 → 北
 petgraph.neighbors()：[北, 西, 南, 东] (逆序返回)
@@ -751,6 +780,7 @@ petgraph.neighbors()：[北, 西, 南, 东] (逆序返回)
 ```
 
 **设计优势**：
+
 1. **直接索引对应**：无需额外映射转换
 2. **高效兼容性检查**：O(1)时间获取对应边数据
 3. **统一的顺序约定**：网格和瓷砖使用相同的索引语义
@@ -811,9 +841,3 @@ impl MyTileSet {
     }
 }
 ```
-
-#### 约束传播算法
-
----
-
-*此文档将根据实施进展持续更新*

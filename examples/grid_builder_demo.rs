@@ -8,15 +8,14 @@
  *
  * @copyright Copyright (c) 2025
  */
-
-use rlwfc::{GridSystem, GridBuilder, Cell, GridError};
+use rlwfc::{Cell, GridBuilder, GridError, GridSystem};
 
 // =============================================================================
 // 线性网格构建器 - 简单的链式连接
 // =============================================================================
 
 /// 线性网格构建器
-/// 
+///
 /// 创建一条线性链接的单元格序列，每个单元格连接到下一个单元格。
 /// 这是最简单的网格类型，适合演示GridBuilder的基本用法。
 struct LinearGridBuilder {
@@ -38,10 +37,8 @@ impl GridBuilder for LinearGridBuilder {
         // 创建所有单元格
         let mut cells = Vec::with_capacity(self.length);
         for i in 0..self.length {
-            let cell_id = grid.add_cell_with_name(
-                Cell::with_id(i as u32),
-                format!("linear_cell_{}", i)
-            );
+            let cell_id =
+                grid.add_cell_with_name(Cell::with_id(i as u32), format!("linear_cell_{}", i));
             cells.push(cell_id);
         }
 
@@ -67,7 +64,7 @@ impl GridBuilder for LinearGridBuilder {
 // =============================================================================
 
 /// 2D正交网格构建器
-/// 
+///
 /// 创建标准的矩形网格，每个内部单元格有四个邻居（东、南、西、北）。
 /// 这是最常用的网格类型，适合大多数2D WFC应用。
 struct Orthogonal2DBuilder {
@@ -94,7 +91,7 @@ impl GridBuilder for Orthogonal2DBuilder {
             for x in 0..self.width {
                 let cell_id = grid.add_cell_with_name(
                     Cell::with_id((y * self.width + x) as u32),
-                    format!("cell_{}_{}", x, y)
+                    format!("cell_{}_{}", x, y),
                 );
                 cells[y].push(cell_id);
             }
@@ -104,12 +101,12 @@ impl GridBuilder for Orthogonal2DBuilder {
         for y in 0..self.height {
             for x in 0..self.width {
                 let current = cells[y][x];
-                
+
                 // 连接到右边（东向）
                 if x + 1 < self.width {
                     grid.create_edge(current, Some(cells[y][x + 1]))?;
                 }
-                
+
                 // 连接到下面（南向）
                 if y + 1 < self.height {
                     grid.create_edge(current, Some(cells[y + 1][x]))?;
@@ -134,7 +131,7 @@ impl GridBuilder for Orthogonal2DBuilder {
 // =============================================================================
 
 /// 环形网格构建器
-/// 
+///
 /// 创建一个环形连接的单元格序列，最后一个单元格连接回第一个单元格。
 /// 这种拓扑结构在某些特殊的WFC应用中很有用。
 struct RingGridBuilder {
@@ -156,10 +153,8 @@ impl GridBuilder for RingGridBuilder {
         // 创建所有单元格
         let mut cells = Vec::with_capacity(self.size);
         for i in 0..self.size {
-            let cell_id = grid.add_cell_with_name(
-                Cell::with_id(i as u32),
-                format!("ring_cell_{}", i)
-            );
+            let cell_id =
+                grid.add_cell_with_name(Cell::with_id(i as u32), format!("ring_cell_{}", i));
             cells.push(cell_id);
         }
 
@@ -212,12 +207,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn demonstrate_linear_grid() -> Result<(), Box<dyn std::error::Error>> {
     let linear_builder = LinearGridBuilder::new(5);
     let linear_grid = GridSystem::from_builder(linear_builder)?;
-    
+
     println!("   类型: LinearGrid");
-    println!("   单元格: {}, 边: {}", 
-             linear_grid.get_cells_count(), 
-             linear_grid.get_edges_count());
-    
+    println!(
+        "   单元格: {}, 边: {}",
+        linear_grid.get_cells_count(),
+        linear_grid.get_edges_count()
+    );
+
     // 验证线性连接
     if let Some(first_cell) = linear_grid.get_cell_by_name("linear_cell_0") {
         let neighbors = linear_grid.get_neighbors(first_cell);
@@ -232,17 +229,19 @@ fn demonstrate_linear_grid() -> Result<(), Box<dyn std::error::Error>> {
 fn demonstrate_2d_grid() -> Result<(), Box<dyn std::error::Error>> {
     let grid_builder = Orthogonal2DBuilder::new(3, 3);
     let grid_2d = GridSystem::from_builder(grid_builder)?;
-    
+
     println!("   类型: Orthogonal2D");
-    println!("   单元格: {}, 边: {}", 
-             grid_2d.get_cells_count(), 
-             grid_2d.get_edges_count());
-    
+    println!(
+        "   单元格: {}, 边: {}",
+        grid_2d.get_cells_count(),
+        grid_2d.get_edges_count()
+    );
+
     // 测试中心单元格的连接
     if let Some(center_cell) = grid_2d.get_cell_by_name("cell_1_1") {
         let neighbors = grid_2d.get_neighbors(center_cell);
         println!("   中心单元格的邻居数: {}", neighbors.len());
-        
+
         // 演示方向查询
         use rlwfc::{Direction4, DirectionTrait};
         println!("   方向查询:");
@@ -263,12 +262,14 @@ fn demonstrate_2d_grid() -> Result<(), Box<dyn std::error::Error>> {
 fn demonstrate_ring_grid() -> Result<(), Box<dyn std::error::Error>> {
     let ring_builder = RingGridBuilder::new(6);
     let ring_grid = GridSystem::from_builder(ring_builder)?;
-    
+
     println!("   类型: RingGrid");
-    println!("   单元格: {}, 边: {}", 
-             ring_grid.get_cells_count(), 
-             ring_grid.get_edges_count());
-    
+    println!(
+        "   单元格: {}, 边: {}",
+        ring_grid.get_cells_count(),
+        ring_grid.get_edges_count()
+    );
+
     // 验证环形连接：每个节点都应该有1个出边
     let mut all_have_one_neighbor = true;
     for cell_id in ring_grid.get_all_cells() {
@@ -293,36 +294,54 @@ fn compare_grid_builders() -> Result<(), Box<dyn std::error::Error>> {
     {
         let builder = LinearGridBuilder::new(5);
         let grid = GridSystem::from_builder(builder)?;
-        let validation = if grid.validate_structure().is_ok() { "✅" } else { "❌" };
-        println!("   | {:8} | {:6} | {:4} | {:8} |", 
-                 "线性(5)",
-                 grid.get_cells_count(),
-                 grid.get_edges_count(),
-                 validation);
+        let validation = if grid.validate_structure().is_ok() {
+            "✅"
+        } else {
+            "❌"
+        };
+        println!(
+            "   | {:8} | {:6} | {:4} | {:8} |",
+            "线性(5)",
+            grid.get_cells_count(),
+            grid.get_edges_count(),
+            validation
+        );
     }
 
     // 2D网格
     {
         let builder = Orthogonal2DBuilder::new(3, 3);
         let grid = GridSystem::from_builder(builder)?;
-        let validation = if grid.validate_structure().is_ok() { "✅" } else { "❌" };
-        println!("   | {:8} | {:6} | {:4} | {:8} |", 
-                 "2D(3x3)",
-                 grid.get_cells_count(),
-                 grid.get_edges_count(),
-                 validation);
+        let validation = if grid.validate_structure().is_ok() {
+            "✅"
+        } else {
+            "❌"
+        };
+        println!(
+            "   | {:8} | {:6} | {:4} | {:8} |",
+            "2D(3x3)",
+            grid.get_cells_count(),
+            grid.get_edges_count(),
+            validation
+        );
     }
 
     // 环形网格
     {
         let builder = RingGridBuilder::new(6);
         let grid = GridSystem::from_builder(builder)?;
-        let validation = if grid.validate_structure().is_ok() { "✅" } else { "❌" };
-        println!("   | {:8} | {:6} | {:4} | {:8} |", 
-                 "环形(6)",
-                 grid.get_cells_count(),
-                 grid.get_edges_count(),
-                 validation);
+        let validation = if grid.validate_structure().is_ok() {
+            "✅"
+        } else {
+            "❌"
+        };
+        println!(
+            "   | {:8} | {:6} | {:4} | {:8} |",
+            "环形(6)",
+            grid.get_cells_count(),
+            grid.get_edges_count(),
+            validation
+        );
     }
 
     Ok(())
@@ -334,4 +353,4 @@ fn validate_and_report(grid: &GridSystem, grid_type: &str) {
         Ok(()) => println!("   ✅ {}结构验证通过", grid_type),
         Err(e) => println!("   ❌ {}结构验证失败: {:?}", grid_type, e),
     }
-} 
+}

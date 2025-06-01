@@ -2,7 +2,45 @@
 name = "rlwfc"
 version = "0.1.0"
 edition = "2021"
+authors = ["amazcuter <amazcuter@outlook.com>"]
+description = "Rust implementation of Wave Function Collapse (WFC) algorithm with type safety and direction-aware grid system"
+homepage = "https://github.com/amazcuter/rlwfc"
+repository = "https://github.com/amazcuter/rlwfc"
+documentation = "https://docs.rs/rlwfc"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+keywords = ["wfc", "wave-function-collapse", "procedural-generation", "algorithm", "grid"]
+categories = ["algorithms", "game-development", "graphics", "mathematics"]
+rust-version = "1.70"
 
 [dependencies]
-petgraph = "0.6"
-rand = "0.8"
+petgraph = "0.8"
+rand = "0.9"
+
+[dev-dependencies]
+# 用于示例和测试
+criterion = "0.6"
+
+[features]
+default = []
+
+[[example]]
+name = "orthogonal_2d_wfc"
+path = "examples/orthogonal_2d_wfc.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "basic_usage"
+path = "examples/basic_usage.rs"
+
+[[example]]
+name = "grid_builder_demo"
+path = "examples/grid_builder_demo.rs"
+
+[[example]]
+name = "tile_system_demo"
+path = "examples/tile_system_demo.rs"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
